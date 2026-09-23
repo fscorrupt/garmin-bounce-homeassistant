@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/fscorrupt/garmin-bounce-homeassistant/main/icon.png" alt="Garmin Bounce Home Assistant" width="160" height="160">
+  <img src="https://raw.githubusercontent.com/fscorrupt/garmin-bounce-homeassistant/main/icon.png" alt="Garmin Bounce Home Assistant" width="140" height="140">
 </p>
 
 # Garmin Bounce & Garmin Jr. - Home Assistant Integration
@@ -8,165 +8,169 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Integrate your **Garmin Bounce 2** (and Garmin Vivofit Jr. smartwatches) directly into **Home Assistant**. Features live GPS location tracking, two-way messaging & family group chat, voice message playback, battery and step telemetry, and on-demand LTE wake-up commands.
+Custom component for Home Assistant to integrate the **Garmin Bounce 2** and Garmin Vivofit Jr. wearables. Supports real-time GPS tracking, two-way messaging, voice message playback, device modes (School Mode, Do Not Disturb), geofenced safety zones, activity telemetry, and on-demand LTE commands.
 
 ---
 
-## ✨ Features
+## Features
 
-- 📍 **GPS Device Tracker**: Real-time position tracking (`device_tracker`), latitude, longitude, altitude, speed, fix type, and accuracy.
-- 💬 **Two-Way Messaging**: Send direct text messages to the watch or to the family group chat via `garmin_bounce.send_message`.
-- 🎙️ **Voice Messages & Audio Playback**: Receive audio messages (`.ogg` Opus) from the watch, automatically cached for in-dashboard playback, and send voice recordings via `garmin_bounce.send_voice_message`.
-- 📜 **Chat History**: Full message history attribute (`chat_history`) on `sensor.*_last_message` tracking sender, direction, timestamp, and audio.
-- 🔋 **Battery Monitoring**: Battery level percentage sensor (`sensor.*_battery_level`) and charging state detection.
-- 👟 **Fitness Telemetry**: Daily steps counter (`sensor.*_daily_steps`), daily step goal (`sensor.*_step_goal`), and all-time records.
-- 📶 **LTE & Network Status**: Active subscription verification (`sensor.*_lte_status`), satellite count, and GPS fix type (GPS, Wi-Fi Anchor).
-- 📡 **Remote Location Refresh Button**: Send an on-demand LTE wake-up instruction (`button.*_refresh_location`) to force the watch to take an immediate GPS fix.
-- 📡 **LiveTrack Mode**: Start high-frequency LTE tracking session (`button.*_start_livetrack`).
-- 🔄 **Cloud Sync Trigger**: Force an instant cloud re-poll (`button.*_poll_cloud_data`) without waiting for the scan interval.
-- ⚡ **Configurable Cloud Polling**: Set your preferred polling interval (15s – 1800s, default 60s) via Options Flow with zero watch battery drain.
-- 🔐 **Garmin 2FA / MFA Support**: Handles two-factor authentication codes natively in the Home Assistant UI during setup.
+- **GPS Location Tracking**: Real-time position tracking (`device_tracker`), latitude, longitude, altitude, speed, fix type, and accuracy.
+- **School Mode**: Monitor and switch School Mode (`OFF`, `RESTRICTED`, `ALL`) via switches, selects, and services.
+- **Do Not Disturb (DND)**: Toggle and monitor Do Not Disturb on the watch (`switch.*_do_not_disturb`, `sensor.*_do_not_disturb_status`).
+- **Safety Zones (Geofences)**: Automatic evaluation of Garmin-configured geofences (e.g. Zuhause, Schule, Hort, Oma) with exact distance calculations.
+- **Two-Way Messaging**: Send direct text messages to the watch or to the family group chat, including interactive input helper support.
+- **Quick Message Presets**: Send predefined canned message templates directly from a dropdown or card button.
+- **Voice Message Playback**: Automatically caches incoming `.ogg` Opus audio messages for in-dashboard playback, and supports sending audio files.
+- **Chat Transcript**: Full conversation history attribute on `sensor.*_last_message` tracking sender, direction, timestamp, and audio.
+- **Battery & Telemetry**: Battery percentage, charging status, daily steps, step goals, all-time step records, satellite count, and LTE subscription status.
+- **Remote LTE Commands**: Instant GPS wake-up ping (`button.*_refresh_location`) and LiveTrack continuous tracking session trigger.
+- **Configurable Polling**: Custom cloud polling interval (15s to 1800s, default 60s) via Options Flow with zero watch battery consumption.
+- **Authentication**: Supports Garmin SSO login including two-factor authentication (MFA/2FA) and direct token authentication.
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Method 1: HACS (Recommended)
 
-1. Open **Home Assistant** and navigate to **HACS** > **Integrations**.
-2. Click the three dots in the top right corner and select **Custom repositories**.
-3. Add repository URL `https://github.com/fscorrupt/garmin-bounce-homeassistant`, choose Category **Integration**, and click **Add**.
+1. In Home Assistant, open **HACS** > **Integrations**.
+2. Click the menu in the top right corner and select **Custom repositories**.
+3. Add `https://github.com/fscorrupt/garmin-bounce-homeassistant` with category **Integration**.
 4. Search for **Garmin Bounce & Jr.** and click **Download**.
 5. Restart Home Assistant.
 
 ### Method 2: Manual Installation
 
-1. Copy the `custom_components/garmin_bounce` directory into your Home Assistant `<config_dir>/custom_components/` folder.
+1. Copy the `custom_components/garmin_bounce` directory into your Home Assistant installation under `<config_dir>/custom_components/`.
 2. Restart Home Assistant.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Initial Setup
+
 1. In Home Assistant, go to **Settings** > **Devices & Services** > **Add Integration**.
 2. Search for **Garmin Bounce & Jr.**.
-3. Enter your Garmin Connect account **Email** and **Password**.
-4. If your account has two-factor authentication enabled, enter the 6-digit **MFA Code** sent to your email or SMS.
-5. The integration will automatically discover all families, kids, and Bounce watches registered to your account!
+3. Enter your Garmin Connect account credentials (**Email** and **Password**).
+4. If two-factor authentication is enabled, enter the verification code sent to your email or phone.
+5. The integration will automatically discover all families, kids, and Bounce watches registered to your account.
 
-### Options & Cloud Polling Interval
-You can customize how frequently Home Assistant checks Garmin Cloud for updated GPS coordinates and sensor metrics:
-1. Go to **Settings** > **Devices & Services** > **Garmin Bounce & Jr.**.
-2. Click **Configure** (Konfigurieren).
-3. Set the **Cloud Polling Interval** in seconds (range: `15` to `1800` seconds; default: `60` seconds).
-4. Click **Submit**. The integration reloads immediately with the new update interval without requiring a Home Assistant restart.
+### Polling Interval (Options Flow)
 
-> [!TIP]
-> **Zero Watch Battery Consumption:** Polling queries Garmin's Cloud servers (`api.gcs.garmin.com`) directly from Home Assistant. It does **not** communicate with the watch over LTE or wake it up. When the watch sends updated location data to Garmin (e.g. crossing a geofence), Home Assistant will pick it up almost immediately on its next poll cycle.
+1. In Home Assistant, go to **Settings** > **Devices & Services** > **Garmin Bounce & Jr.**.
+2. Click **Configure** (the gear icon).
+3. Set the cloud polling interval in seconds (between `15` and `1800` seconds; default: `60`).
+4. Click **Submit**. The integration reloads immediately with the new update interval.
+
+> [!NOTE]
+> Polling queries Garmin Cloud servers directly from Home Assistant. It does not communicate directly with the watch or drain its battery.
 
 ---
 
-## 📊 Available Entities
+## Available Entities
 
 | Platform | Entity Name | Description |
 | :--- | :--- | :--- |
-| `device_tracker` | `device_tracker.<child>_bounce_2` | Live GPS location, accuracy, altitude, and speed |
-| `sensor` | `sensor.<child>_battery_level` | Watch battery percentage (0-100%) and charging status |
-| `sensor` | `sensor.<child>_daily_steps` | Steps walked today (and yesterday's steps as attribute) |
-| `sensor` | `sensor.<child>_step_goal` | Daily target step goal |
-| `sensor` | `sensor.<child>_steps_record` | All-time personal step record |
+| `device_tracker` | `device_tracker.<child>_bounce_2` | Live GPS coordinates, altitude, speed, fix type, and safety zone attribute |
+| `switch` | `switch.<child>_school_mode` | Toggle School Mode on/off |
+| `switch` | `switch.<child>_do_not_disturb` | Toggle Do Not Disturb (DND) on/off |
+| `select` | `select.<child>_quick_message` | Dropdown to send predefined message templates to the watch |
+| `select` | `select.<child>_school_mode_setting` | Configure School Mode level (`OFF`, `RESTRICTED`, `ALL`) |
+| `sensor` | `sensor.<child>_safety_zone` | Current zone name or nearest zone distance |
+| `sensor` | `sensor.<child>_school_mode_status` | Current School Mode restriction state and schedule |
+| `sensor` | `sensor.<child>_do_not_disturb_status` | Current DND state and vibration settings |
+| `sensor` | `sensor.<child>_battery_level` | Battery percentage (0-100%) and charging state |
+| `sensor` | `sensor.<child>_daily_steps` | Steps walked today and yesterday's steps |
+| `sensor` | `sensor.<child>_step_goal` | Target daily step goal |
+| `sensor` | `sensor.<child>_steps_record` | Personal all-time step record |
 | `sensor` | `sensor.<child>_lte_status` | Subscription status (`ACTIVE`) |
 | `sensor` | `sensor.<child>_gps_satellites` | Number of tracked GNSS satellites |
 | `sensor` | `sensor.<child>_location_fix_type` | Fix method (`GPS`, `WFPS_ANCHOR`) |
 | `sensor` | `sensor.<child>_last_sync` | Timestamp of last cloud sync |
-| `sensor` | `sensor.<child>_last_message` | Latest message text, sender, direction, and full `chat_history` attribute |
-| `button` | `button.<child>_refresh_location` | Dispatches an LTE command to update GPS fix immediately |
-| `button` | `button.<child>_start_livetrack` | Triggers continuous LiveTrack tracking session over LTE |
+| `sensor` | `sensor.<child>_last_message` | Latest message text, sender, direction, and full `chat_history` |
+| `button` | `button.<child>_refresh_location` | Sends an LTE command to update GPS fix immediately |
+| `button` | `button.<child>_start_livetrack` | Starts a continuous LiveTrack session over LTE |
 | `button` | `button.<child>_poll_cloud_data` | Forces an immediate refresh of all cloud data |
 
 ---
 
-## 💬 Messaging & Voice Services
+## Services
 
-The integration exposes dedicated Home Assistant services for two-way communication with the watch:
+### `garmin_bounce.send_message`
 
-### 1. `garmin_bounce.send_message`
-Send a text message directly to your child's Bounce 2 watch or to the family group chat.
+Sends a text message to a watch or the family group chat. Supports passing raw text or referencing an `input_text` helper entity (which is automatically cleared upon delivery).
 
 ```yaml
 service: garmin_bounce.send_message
 data:
   target: "child" # "child" or "family"
   message: "Das Essen ist fertig! Bitte komm jetzt nach Hause."
+  # Or reference an input_text helper:
+  # message: "input_text.garmin_bounce_message"
 ```
 
-### 2. `garmin_bounce.send_voice_message`
-Send an audio / voice message (`.ogg` Opus format) to the watch.
+### `garmin_bounce.send_voice_message`
+
+Sends an audio/voice recording (`.ogg` Opus format) to the watch.
 
 ```yaml
 service: garmin_bounce.send_voice_message
 data:
-  target: "child"
+  target: "child" # "child" or "family"
   audio_file: "/local/garmin_bounce/reminder.ogg"
 ```
 
-### 3. Voice Message Playback in Dashboards
-Voice messages sent by your child from the Bounce watch are automatically cached in `/config/www/garmin_bounce/` and exposed via `audio_url` in the sensor attributes (`/local/garmin_bounce/<id>.ogg`), playable directly in Home Assistant cards.
+### `garmin_bounce.set_school_mode`
 
----
+Configures the School Mode restriction state on the watch.
 
-## 💡 Automation Examples
-
-### 1. Alert when Child's Watch Battery is Low
 ```yaml
-alias: "Child Watch Battery Low"
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.mia_battery_level
-    below: 20
-action:
-  - service: notify.notify
-    data:
-      title: "Garmin Bounce Battery Low"
-      message: "Mia's watch battery is down to {{ states('sensor.mia_battery_level') }}%."
+service: garmin_bounce.set_school_mode
+data:
+  mode: "RESTRICTED" # "OFF", "RESTRICTED", or "ALL"
 ```
 
-### 2. Request Fresh Location When Leaving School Zone
-```yaml
-alias: "Refresh Location on School Departure"
-trigger:
-  - platform: zone
-    entity_id: device_tracker.mia_bounce_2
-    zone: zone.school
-    event: leave
-action:
-  - service: button.press
-    target:
-      entity_id: button.mia_refresh_location
-```
+### `garmin_bounce.set_dnd_mode`
 
-### 3. Send Automatic Dinner Reminder to Watch
+Enables or disables Do Not Disturb mode on the watch.
+
 ```yaml
-alias: "Send Dinner Reminder to Mia"
-trigger:
-  - platform: time
-    at: "18:00:00"
-action:
-  - service: garmin_bounce.send_message
-    data:
-      target: "child"
-      message: "Hallo Mia! Das Abendessen ist in 15 Minuten fertig. Bitte komm nach Hause."
+service: garmin_bounce.set_dnd_mode
+data:
+  enabled: true
 ```
 
 ---
 
-## 🎨 Lovelace Dashboard Cards
+## Dashboard Cards
 
-Pre-configured YAML cards combining the live Map, Battery & Steps metrics, and Action Buttons are available in [`dashboard_cards.yaml`](dashboard_cards.yaml).
+Ready-to-use Lovelace card configurations (both Mushroom-based and Native Lovelace) are available in [`dashboard_cards.yaml`](dashboard_cards.yaml).
+
+Included features:
+- Live GPS Map card
+- Status chips (Battery, Daily Steps, LTE, Safety Zone)
+- Mode toggles for School Mode and Do Not Disturb
+- Action buttons for LTE GPS Locate, LiveTrack, and Cloud Sync
+- Interactive manual text messaging via `input_text` helper
+- Quick message preset selection and 1-click preset buttons
+- Live conversation feed with audio player for voice messages
 
 ---
 
-## 📄 License
+## Reverse Engineering
 
-Distributed under the MIT License. This project is not affiliated with, endorsed by, or associated with Garmin Ltd.
+For technical details on the APK decompilation analysis, token exchange architecture, and REST API endpoints, see [`REVERSE_ENGINEERING.md`](REVERSE_ENGINEERING.md).
+
+---
+
+## Frequently Asked Questions
+
+### Why does HACS show "(icon not available)" during search?
+The HACS repository search overview checks the centralized Home Assistant brands repository for icons. Because custom repositories added manually are not in the central core catalog, HACS displays `(icon not available)` in the search list. Once installed, the integration icon displays normally under **Settings** > **Devices & Services** from the bundled component files.
+
+---
+
+## License
+
+Distributed under the MIT License. This project is independent and not affiliated with or endorsed by Garmin Ltd.
