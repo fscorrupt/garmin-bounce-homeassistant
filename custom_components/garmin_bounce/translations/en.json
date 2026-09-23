@@ -6,7 +6,8 @@
         "description": "Enter your Garmin Connect account credentials.",
         "data": {
           "email": "Email",
-          "password": "Password"
+          "password": "Password",
+          "token_json": "Saved Token JSON (Optional - bypasses 429 rate limits)"
         }
       },
       "mfa": {
