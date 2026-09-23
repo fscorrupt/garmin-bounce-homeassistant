@@ -59,6 +59,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def async_handle_send_message(call: ServiceCall) -> None:
         """Handle sending text messages via Garmin Bounce."""
         msg_text = call.data[ATTR_MESSAGE]
+        input_entity = None
+        if isinstance(msg_text, str) and msg_text.startswith("input_text."):
+            input_entity = msg_text
+            state_obj = hass.states.get(input_entity)
+            if state_obj and state_obj.state not in ("unknown", "unavailable"):
+                msg_text = state_obj.state
+            else:
+                _LOGGER.warning("Entity %s has no text value", input_entity)
+                return
+
+        if not msg_text or not str(msg_text).strip():
+            _LOGGER.warning("Empty message text received, skipping send")
+            return
+
         target = call.data.get(ATTR_TARGET, "child")
         req_dev_id = call.data.get(ATTR_DEVICE_ID)
 
@@ -83,6 +97,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         if success:
             _LOGGER.info("Garmin Bounce message sent successfully")
+            if input_entity:
+                await hass.services.async_call(
+                    "input_text", "set_value", {"entity_id": input_entity, "value": ""}
+                )
             await coord.async_request_refresh()
         else:
             _LOGGER.error("Failed to send Garmin Bounce message")
