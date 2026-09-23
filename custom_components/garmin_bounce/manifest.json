@@ -1,0 +1,15 @@
+{
+  "domain": "garmin_bounce",
+  "name": "Garmin Bounce & Jr.",
+  "codeowners": ["@fscorrupt"],
+  "config_flow": true,
+  "documentation": "https://github.com/fscorrupt/garmin-bounce-homeassistant",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/fscorrupt/garmin-bounce-homeassistant/issues",
+  "requirements": [
+    "garminconnect>=0.3.16",
+    "requests>=2.28.0"
+  ],
+  "version": "1.0.0"
+}

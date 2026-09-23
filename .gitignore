@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Garmin Tokens and Debug Dumps (Contain personal tokens and coordinates)
+garmin_tokens.json
+bounce_debug_response.json
+*.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

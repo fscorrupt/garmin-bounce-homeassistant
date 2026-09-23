@@ -1,0 +1,61 @@
+send_message:
+  name: Send Message
+  description: Send a text message to a Garmin Bounce smartwatch or to the family group chat.
+  fields:
+    message:
+      name: Message
+      description: The text message to send to the watch.
+      required: true
+      example: "Abendessen ist fertig! Bitte komm nach Hause."
+      selector:
+        text:
+          multiline: true
+    target:
+      name: Target
+      description: Whether to send directly to a child or to the family group chat.
+      required: false
+      default: "child"
+      selector:
+        select:
+          options:
+            - label: "Child (Direct message)"
+              value: "child"
+            - label: "Family (Group chat)"
+              value: "family"
+    device_id:
+      name: Device ID
+      description: The specific Garmin Bounce device ID (optional if only one watch is registered).
+      required: false
+      example: "3627107116"
+      selector:
+        text:
+
+send_voice_message:
+  name: Send Voice Message
+  description: Send an audio / voice recording (.ogg Opus) to a Garmin Bounce smartwatch or family group chat.
+  fields:
+    audio_file:
+      name: Audio File Path
+      description: Local file path or /local/ relative URL to the .ogg audio file.
+      required: true
+      example: "/local/garmin_bounce/reminder.ogg"
+      selector:
+        text:
+    target:
+      name: Target
+      description: Whether to send directly to a child or to the family group chat.
+      required: false
+      default: "child"
+      selector:
+        select:
+          options:
+            - label: "Child (Direct message)"
+              value: "child"
+            - label: "Family (Group chat)"
+              value: "family"
+    device_id:
+      name: Device ID
+      description: The specific Garmin Bounce device ID (optional).
+      required: false
+      selector:
+        text:

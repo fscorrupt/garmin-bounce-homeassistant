@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Garmin Bounce & Jr. Anmeldung",
+        "description": "Gib deine Garmin Connect Zugangsdaten ein.",
+        "data": {
+          "email": "E-Mail-Adresse",
+          "password": "Passwort"
+        }
+      },
+      "mfa": {
+        "title": "Zwei-Faktor-Authentifizierung (2FA)",
+        "description": "Gib den 6-stelligen MFA / 2FA Bestätigungscode ein, der per E-Mail oder SMS gesendet wurde.",
+        "data": {
+          "mfa_code": "MFA-Code"
+        }
+      }
+    },
+    "error": {
+      "auth_error": "Ungültige E-Mail-Adresse oder falsches Passwort.",
+      "invalid_mfa": "Ungültiger 2FA / MFA Bestätigungscode.",
+      "rate_limit": "Garmin Login-Ratenlimit erreicht. Bitte warte einige Minuten vor dem nächsten Versuch.",
+      "connection_error": "Verbindung zu den Garmin-Servern fehlgeschlagen."
+    },
+    "abort": {
+      "already_configured": "Dieses Garmin-Konto ist bereits eingerichtet."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Batterieladestand"
+      },
+      "steps_today": {
+        "name": "Heutige Schritte"
+      },
+      "steps_goal": {
+        "name": "Schrittziel"
+      },
+      "steps_record": {
+        "name": "Schrittrekord"
+      },
+      "subscription_status": {
+        "name": "LTE-Status"
+      },
+      "satellite_count": {
+        "name": "GPS-Satelliten"
+      },
+      "fix_type": {
+        "name": "Standort-Fix-Typ"
+      },
+      "last_sync_date": {
+        "name": "Letzte Synchronisierung"
+      },
+      "last_message": {
+        "name": "Letzte Nachricht"
+      }
+    },
+    "button": {
+      "locate": {
+        "name": "Standort aktualisieren"
+      }
+    }
+  },
+  "services": {
+    "send_message": {
+      "name": "Nachricht senden",
+      "description": "Sendet eine Textnachricht an eine Garmin Bounce Uhr oder an den Familienchat."
+    },
+    "send_voice_message": {
+      "name": "Sprachnachricht senden",
+      "description": "Sendet eine Audio-/Sprachnachricht (.ogg Opus) an eine Garmin Bounce Uhr oder an den Familienchat."
+    }
+  }
+}

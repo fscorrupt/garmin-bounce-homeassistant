@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Garmin Bounce & Jr. Login",
+        "description": "Enter your Garmin Connect account credentials.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "mfa": {
+        "title": "Two-Factor Authentication",
+        "description": "Enter the 6-digit MFA / 2FA verification code sent to your email or phone.",
+        "data": {
+          "mfa_code": "MFA Code"
+        }
+      }
+    },
+    "error": {
+      "auth_error": "Invalid email or password.",
+      "invalid_mfa": "Invalid MFA verification code.",
+      "rate_limit": "Garmin login rate limit reached. Please wait a few minutes before trying again.",
+      "connection_error": "Failed to connect to Garmin servers."
+    },
+    "abort": {
+      "already_configured": "This Garmin account is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Battery Level"
+      },
+      "steps_today": {
+        "name": "Daily Steps"
+      },
+      "steps_goal": {
+        "name": "Step Goal"
+      },
+      "steps_record": {
+        "name": "Steps Record"
+      },
+      "subscription_status": {
+        "name": "LTE Status"
+      },
+      "satellite_count": {
+        "name": "GPS Satellites"
+      },
+      "fix_type": {
+        "name": "Location Fix Type"
+      },
+      "last_sync_date": {
+        "name": "Last Sync"
+      },
+      "last_message": {
+        "name": "Last Message"
+      }
+    },
+    "button": {
+      "locate": {
+        "name": "Refresh Location"
+      }
+    }
+  },
+  "services": {
+    "send_message": {
+      "name": "Send Message",
+      "description": "Send a text message to a Garmin Bounce watch or the family group chat."
+    },
+    "send_voice_message": {
+      "name": "Send Voice Message",
+      "description": "Send an audio/voice recording (.ogg Opus) to a Garmin Bounce watch or family group chat."
+    }
+  }
+}
