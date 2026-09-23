@@ -1,4 +1,4 @@
-"""The Garmin Bounce & Jr. integration."""
+from datetime import timedelta
 import logging
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
@@ -10,6 +10,8 @@ from .const import (
     PLATFORMS,
     CONF_DI_TOKEN,
     CONF_IT_TOKEN,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
     SERVICE_SEND_MESSAGE,
     SERVICE_SEND_VOICE_MESSAGE,
     ATTR_MESSAGE,
@@ -45,12 +47,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     it_token = entry.data.get(CONF_IT_TOKEN)
 
     api = GarminBounceApiClient(di_token, it_token)
-    coordinator = GarminBounceDataUpdateCoordinator(hass, api)
+    scan_interval_sec = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
+    coordinator = GarminBounceDataUpdateCoordinator(
+        hass, api, update_interval=timedelta(seconds=scan_interval_sec)
+    )
 
     # Perform initial data fetch
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # Reload on options update
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Forward to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -178,4 +186,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SEND_VOICE_MESSAGE)
 
     return unload_ok
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
 

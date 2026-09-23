@@ -28,6 +28,17 @@
       "already_configured": "Dieses Garmin-Konto ist bereits eingerichtet."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Garmin Bounce Einstellungen",
+        "description": "Konfiguriere das Cloud-Abfrageintervall (in Sekunden). Dies fragt lediglich die Garmin Cloud ab und verbraucht KEINEN Akku der Uhr.",
+        "data": {
+          "scan_interval": "Cloud-Abfrageintervall (Sekunden)"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "battery_level": {

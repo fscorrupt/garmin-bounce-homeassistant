@@ -16,13 +16,18 @@ _LOGGER = logging.getLogger(__name__)
 class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
     """Class to manage fetching Garmin Bounce and Jr. data from the cloud."""
 
-    def __init__(self, hass: HomeAssistant, api: GarminBounceApiClient) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: GarminBounceApiClient,
+        update_interval: Optional[timedelta] = None,
+    ) -> None:
         """Initialize coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=update_interval or DEFAULT_SCAN_INTERVAL,
         )
         self.api = api
 

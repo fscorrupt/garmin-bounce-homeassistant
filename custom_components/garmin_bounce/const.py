@@ -7,8 +7,10 @@ PLATFORMS = ["device_tracker", "sensor", "button"]
 CONF_TOKEN_DATA = "token_data"
 CONF_DI_TOKEN = "di_token"
 CONF_IT_TOKEN = "it_token"
+CONF_SCAN_INTERVAL = "scan_interval"
 
-DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
+DEFAULT_SCAN_INTERVAL_SECONDS = 60
+DEFAULT_SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS)
 USER_AGENT = "GarminJr/5.23 (Android)"
 
 # Garmin API Endpoints
