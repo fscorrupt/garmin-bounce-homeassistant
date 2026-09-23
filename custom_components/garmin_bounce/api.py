@@ -6,9 +6,13 @@ import requests
 
 from .const import (
     URL_TOKEN_EXCHANGE,
+    URL_DI_OAUTH_TOKEN,
     URL_VIVOKID_FAMILY_INFO,
     URL_VIVOKID_SUBSCRIPTION,
     URL_VIVOKID_ACTIVITY,
+    URL_VIVOKID_CANNED_MESSAGES,
+    URL_VIVOKID_GEOFENCES,
+    URL_CONNECT_DEVICE_SETTINGS,
     URL_GCS_TRACKPOINTS,
     URL_GCS_UPDATE_LOCATION,
     URL_GCS_START_LIVE_TRACK,
@@ -38,6 +42,9 @@ class GarminBounceApiClient:
         """Initialize the API client."""
         self._di_token = di_token
         self._it_token = it_token
+        self._jr_di_token: Optional[str] = None
+        self._kid_tokens: Dict[int, str] = {}
+        self._kid_token_expires: Dict[int, float] = {}
 
     @property
     def di_token(self) -> str:
@@ -300,4 +307,174 @@ class GarminBounceApiClient:
         except Exception as err:
             _LOGGER.error("Error sending audio message: %s", err)
         return False
+
+    def exchange_jr_di_token(self) -> str:
+        """
+        Exchange GCS IT token for a Garmin Junior DI OAuth token.
+        This represents the parent in the Junior ecosystem.
+        """
+        if not self._it_token:
+            self.exchange_it_token()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+        }
+        data = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "subject_token": self._it_token,
+            "subject_token_type": "https://services.garmin.com/api/oauth/token",
+            "client_id": "VIVOFIT_JR_ANDROID",
+        }
+        resp = requests.post(URL_DI_OAUTH_TOKEN, headers=headers, data=data, timeout=15)
+        if resp.status_code != 200:
+            _LOGGER.error("Failed to exchange Junior DI token (HTTP %s): %s", resp.status_code, resp.text)
+            raise RuntimeError(f"Junior DI token exchange failed: HTTP {resp.status_code}")
+
+        self._jr_di_token = resp.json()["access_token"]
+        return self._jr_di_token
+
+    def exchange_kid_token(self, kid_connect_id: int) -> str:
+        """
+        Exchange Junior DI token for a Child-specific OAuth Bearer token.
+        Allows managing device settings directly on the watch profile.
+        """
+        now = datetime.now(timezone.utc).timestamp()
+        if kid_connect_id in self._kid_tokens:
+            expires_at = self._kid_token_expires.get(kid_connect_id, 0)
+            if now < (expires_at - 300):
+                return self._kid_tokens[kid_connect_id]
+
+        if not self._jr_di_token:
+            self.exchange_jr_di_token()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+        }
+        data = {
+            "grant_type": "https://connectapi.garmin.com/di-oauth2-service/oauth/grant/gc_kid",
+            "access_token": self._jr_di_token,
+            "gc_kid_id": kid_connect_id,
+            "client_id": "VIVOFIT_JR_ANDROID",
+        }
+        resp = requests.post(URL_DI_OAUTH_TOKEN, headers=headers, data=data, timeout=15)
+        if resp.status_code == 401:
+            # Refresh Junior DI token and retry once
+            self.exchange_jr_di_token()
+            data["access_token"] = self._jr_di_token
+            resp = requests.post(URL_DI_OAUTH_TOKEN, headers=headers, data=data, timeout=15)
+
+        if resp.status_code != 200:
+            _LOGGER.error("Failed to exchange Kid token for %s (HTTP %s): %s", kid_connect_id, resp.status_code, resp.text)
+            raise RuntimeError(f"Kid token exchange failed: HTTP {resp.status_code}")
+
+        res = resp.json()
+        token = res["access_token"]
+        expires_in = res.get("expires_in", 86400)
+        self._kid_tokens[kid_connect_id] = token
+        self._kid_token_expires[kid_connect_id] = now + expires_in
+        return token
+
+    def _get_kid_headers(self, kid_connect_id: int) -> Dict[str, str]:
+        """Headers for kid device-service endpoints."""
+        token = self.exchange_kid_token(kid_connect_id)
+        return {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def get_device_settings(self, device_id: str, kid_connect_id: int) -> Dict[str, Any]:
+        """Fetch full device settings for the watch using kid credentials."""
+        url = URL_CONNECT_DEVICE_SETTINGS.format(device_id=device_id)
+        try:
+            headers = self._get_kid_headers(kid_connect_id)
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code == 401:
+                # Invalidate and retry
+                self._kid_tokens.pop(kid_connect_id, None)
+                headers = self._get_kid_headers(kid_connect_id)
+                resp = requests.get(url, headers=headers, timeout=15)
+
+            if resp.status_code == 200:
+                return resp.json()
+            _LOGGER.warning("Failed to fetch settings for device %s (HTTP %s): %s", device_id, resp.status_code, resp.text)
+        except Exception as err:
+            _LOGGER.error("Error fetching device settings for %s: %s", device_id, err)
+        return {}
+
+    def update_device_settings(
+        self, device_id: str, kid_connect_id: int, new_settings: Dict[str, Any]
+    ) -> bool:
+        """Update device settings via PUT using kid credentials."""
+        url = URL_CONNECT_DEVICE_SETTINGS.format(device_id=device_id)
+        try:
+            headers = self._get_kid_headers(kid_connect_id)
+            resp = requests.put(url, headers=headers, json=new_settings, timeout=15)
+            if resp.status_code == 401:
+                self._kid_tokens.pop(kid_connect_id, None)
+                headers = self._get_kid_headers(kid_connect_id)
+                resp = requests.put(url, headers=headers, json=new_settings, timeout=15)
+
+            if resp.status_code in (200, 204):
+                _LOGGER.info("Device settings updated successfully for %s", device_id)
+                return True
+            _LOGGER.warning("Failed to update device settings for %s (HTTP %s): %s", device_id, resp.status_code, resp.text)
+        except Exception as err:
+            _LOGGER.error("Error updating device settings for %s: %s", device_id, err)
+        return False
+
+    def set_dnd_mode(self, device_id: str, kid_connect_id: int, enabled: bool) -> bool:
+        """Toggle Do Not Disturb mode on the watch."""
+        settings = self.get_device_settings(device_id, kid_connect_id)
+        if not settings:
+            return False
+        settings["dndEnabled"] = bool(enabled)
+        return self.update_device_settings(device_id, kid_connect_id, settings)
+
+    def set_school_mode(self, device_id: str, kid_connect_id: int, mode: str) -> bool:
+        """Set School Mode on the watch (OFF, RESTRICTED, ALL)."""
+        settings = self.get_device_settings(device_id, kid_connect_id)
+        if not settings:
+            return False
+        if "schoolMode" not in settings or not isinstance(settings["schoolMode"], dict):
+            settings["schoolMode"] = {
+                "startTime": 28800,
+                "endTime": 46800,
+                "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+            }
+        settings["schoolMode"]["mode"] = mode.upper()
+        return self.update_device_settings(device_id, kid_connect_id, settings)
+
+    def get_canned_messages(self, kid_id: int) -> List[Dict[str, Any]]:
+        """Fetch canned message templates for a kid from vivokidapi."""
+        url = URL_VIVOKID_CANNED_MESSAGES.format(kid_id=kid_id)
+        try:
+            resp = requests.get(url, headers=self._get_vivokid_headers(), timeout=15)
+            if resp.status_code == 200:
+                msgs = resp.json()
+                if isinstance(msgs, list):
+                    return sorted(msgs, key=lambda m: m.get("messageOrder", 0))
+            _LOGGER.warning("Failed to fetch canned messages for kid %s (HTTP %s)", kid_id, resp.status_code)
+        except Exception as err:
+            _LOGGER.error("Error fetching canned messages for %s: %s", kid_id, err)
+        return []
+
+    def get_geofences(self, kid_id: int) -> List[Dict[str, Any]]:
+        """Fetch safety zones (geofences) configured for a kid from vivokidapi."""
+        url = URL_VIVOKID_GEOFENCES.format(kid_id=kid_id)
+        try:
+            resp = requests.get(url, headers=self._get_vivokid_headers(), timeout=15)
+            if resp.status_code == 200:
+                zones = resp.json()
+                if isinstance(zones, list):
+                    return zones
+            _LOGGER.warning("Failed to fetch geofences for kid %s (HTTP %s)", kid_id, resp.status_code)
+        except Exception as err:
+            _LOGGER.error("Error fetching geofences for %s: %s", kid_id, err)
+        return []
 

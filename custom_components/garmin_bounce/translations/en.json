@@ -67,11 +67,42 @@
       },
       "last_message": {
         "name": "Last Message"
+      },
+      "safety_zone": {
+        "name": "Safety Zone"
+      },
+      "school_mode_status": {
+        "name": "School Mode Status"
+      },
+      "dnd_status": {
+        "name": "Do Not Disturb Status"
       }
     },
     "button": {
       "locate": {
         "name": "Refresh Location"
+      },
+      "start_livetrack": {
+        "name": "Start LiveTrack"
+      },
+      "poll_cloud_data": {
+        "name": "Poll Cloud Data"
+      }
+    },
+    "switch": {
+      "dnd": {
+        "name": "Do Not Disturb"
+      },
+      "school_mode": {
+        "name": "School Mode"
+      }
+    },
+    "select": {
+      "canned_message": {
+        "name": "Quick Message"
+      },
+      "school_mode_select": {
+        "name": "School Mode Setting"
       }
     }
   },
@@ -83,6 +114,14 @@
     "send_voice_message": {
       "name": "Send Voice Message",
       "description": "Send an audio/voice recording (.ogg Opus) to a Garmin Bounce watch or family group chat."
+    },
+    "set_dnd_mode": {
+      "name": "Set Do Not Disturb Mode",
+      "description": "Enable or disable Do Not Disturb on a Garmin Bounce watch."
+    },
+    "set_school_mode": {
+      "name": "Set School Mode",
+      "description": "Configure School Mode on a Garmin Bounce watch (OFF, RESTRICTED, ALL)."
     }
   }
 }

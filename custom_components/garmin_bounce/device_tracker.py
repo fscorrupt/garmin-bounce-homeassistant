@@ -113,4 +113,5 @@ class GarminBounceDeviceTracker(CoordinatorEntity[GarminBounceDataUpdateCoordina
             "reported_time": t.get("reported_time"),
             "device_id": self._device_id,
             "kid_profile_id": self._device_data.get("kid_id"),
+            "safety_zone": self._device_data.get("current_zone", "Außerhalb"),
         }

@@ -14,10 +14,14 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_SECONDS,
     SERVICE_SEND_MESSAGE,
     SERVICE_SEND_VOICE_MESSAGE,
+    SERVICE_SET_DND,
+    SERVICE_SET_SCHOOL_MODE,
     ATTR_MESSAGE,
     ATTR_TARGET,
     ATTR_AUDIO_FILE,
     ATTR_DEVICE_ID,
+    ATTR_ENABLED,
+    ATTR_MODE,
 )
 from .api import GarminBounceApiClient
 from .coordinator import GarminBounceDataUpdateCoordinator
@@ -37,6 +41,20 @@ SEND_VOICE_MESSAGE_SCHEMA = vol.Schema(
         vol.Required(ATTR_AUDIO_FILE): cv.string,
         vol.Optional(ATTR_DEVICE_ID): cv.string,
         vol.Optional(ATTR_TARGET, default="child"): vol.In(["child", "family"]),
+    }
+)
+
+SET_DND_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENABLED): cv.boolean,
+        vol.Optional(ATTR_DEVICE_ID): cv.string,
+    }
+)
+
+SET_SCHOOL_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_MODE): vol.In(["OFF", "RESTRICTED", "ALL", "off", "restricted", "all"]),
+        vol.Optional(ATTR_DEVICE_ID): cv.string,
     }
 )
 
@@ -155,6 +173,60 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             _LOGGER.error("Failed to send Garmin Bounce audio message")
 
+    async def async_handle_set_dnd(call: ServiceCall) -> None:
+        """Handle setting DND mode on a watch."""
+        enabled = call.data[ATTR_ENABLED]
+        req_dev_id = call.data.get(ATTR_DEVICE_ID)
+
+        coordinators = list(hass.data.get(DOMAIN, {}).values())
+        if not coordinators:
+            return
+        coord = coordinators[0]
+        devices = coord.data.get("devices", {})
+
+        target_dev = None
+        if req_dev_id and req_dev_id in devices:
+            target_dev = devices[req_dev_id]
+        elif devices:
+            target_dev = next(iter(devices.values()))
+
+        if target_dev:
+            dev_id = target_dev.get("device_id")
+            connect_id = target_dev.get("connect_id")
+            success = await hass.async_add_executor_job(
+                coord.api.set_dnd_mode, dev_id, connect_id, enabled
+            )
+            if success:
+                _LOGGER.info("DND mode set to %s on %s", enabled, dev_id)
+                await coord.async_request_refresh()
+
+    async def async_handle_set_school_mode(call: ServiceCall) -> None:
+        """Handle setting School Mode on a watch."""
+        mode = call.data[ATTR_MODE].upper()
+        req_dev_id = call.data.get(ATTR_DEVICE_ID)
+
+        coordinators = list(hass.data.get(DOMAIN, {}).values())
+        if not coordinators:
+            return
+        coord = coordinators[0]
+        devices = coord.data.get("devices", {})
+
+        target_dev = None
+        if req_dev_id and req_dev_id in devices:
+            target_dev = devices[req_dev_id]
+        elif devices:
+            target_dev = next(iter(devices.values()))
+
+        if target_dev:
+            dev_id = target_dev.get("device_id")
+            connect_id = target_dev.get("connect_id")
+            success = await hass.async_add_executor_job(
+                coord.api.set_school_mode, dev_id, connect_id, mode
+            )
+            if success:
+                _LOGGER.info("School mode set to %s on %s", mode, dev_id)
+                await coord.async_request_refresh()
+
     if not hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
         hass.services.async_register(
             DOMAIN,
@@ -171,6 +243,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             schema=SEND_VOICE_MESSAGE_SCHEMA,
         )
 
+    if not hass.services.has_service(DOMAIN, SERVICE_SET_DND):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SET_DND,
+            async_handle_set_dnd,
+            schema=SET_DND_SCHEMA,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_SET_SCHOOL_MODE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SET_SCHOOL_MODE,
+            async_handle_set_school_mode,
+            schema=SET_SCHOOL_MODE_SCHEMA,
+        )
+
     return True
 
 
@@ -184,6 +272,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_SEND_MESSAGE)
         hass.services.async_remove(DOMAIN, SERVICE_SEND_VOICE_MESSAGE)
+        hass.services.async_remove(DOMAIN, SERVICE_SET_DND)
+        hass.services.async_remove(DOMAIN, SERVICE_SET_SCHOOL_MODE)
 
     return unload_ok
 

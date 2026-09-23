@@ -59,3 +59,46 @@ send_voice_message:
       required: false
       selector:
         text:
+
+set_dnd_mode:
+  name: Set Do Not Disturb Mode
+  description: Enable or disable Do Not Disturb (DND) mode on a Garmin Bounce smartwatch.
+  fields:
+    enabled:
+      name: Enabled
+      description: Whether Do Not Disturb should be enabled (true) or disabled (false).
+      required: true
+      selector:
+        boolean:
+    device_id:
+      name: Device ID
+      description: The specific Garmin Bounce device ID (optional).
+      required: false
+      selector:
+        text:
+
+set_school_mode:
+  name: Set School Mode
+  description: Configure School Mode on a Garmin Bounce smartwatch (OFF, RESTRICTED, ALL).
+  fields:
+    mode:
+      name: Mode
+      description: The School Mode setting (OFF, RESTRICTED, or ALL).
+      required: true
+      default: "RESTRICTED"
+      selector:
+        select:
+          options:
+            - label: "Off"
+              value: "OFF"
+            - label: "Restricted (School Mode active)"
+              value: "RESTRICTED"
+            - label: "All (All notifications locked)"
+              value: "ALL"
+    device_id:
+      name: Device ID
+      description: The specific Garmin Bounce device ID (optional).
+      required: false
+      selector:
+        text:
+

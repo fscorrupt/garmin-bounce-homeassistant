@@ -67,11 +67,42 @@
       },
       "last_message": {
         "name": "Letzte Nachricht"
+      },
+      "safety_zone": {
+        "name": "Sicherheitszone"
+      },
+      "school_mode_status": {
+        "name": "Schulmodus-Status"
+      },
+      "dnd_status": {
+        "name": "Bitte nicht stören Status"
       }
     },
     "button": {
       "locate": {
         "name": "Standort aktualisieren"
+      },
+      "start_livetrack": {
+        "name": "LiveTrack starten"
+      },
+      "poll_cloud_data": {
+        "name": "Cloud-Daten abfragen"
+      }
+    },
+    "switch": {
+      "dnd": {
+        "name": "Bitte nicht stören"
+      },
+      "school_mode": {
+        "name": "Schulmodus"
+      }
+    },
+    "select": {
+      "canned_message": {
+        "name": "Schnellnachricht"
+      },
+      "school_mode_select": {
+        "name": "Schulmodus-Einstellung"
       }
     }
   },
@@ -83,6 +114,14 @@
     "send_voice_message": {
       "name": "Sprachnachricht senden",
       "description": "Sendet eine Audio-/Sprachnachricht (.ogg Opus) an eine Garmin Bounce Uhr oder an den Familienchat."
+    },
+    "set_dnd_mode": {
+      "name": "Bitte nicht stören einstellen",
+      "description": "Aktiviert oder deaktiviert den 'Bitte nicht stören'-Modus auf einer Garmin Bounce Uhr."
+    },
+    "set_school_mode": {
+      "name": "Schulmodus einstellen",
+      "description": "Konfiguriert den Schulmodus auf einer Garmin Bounce Uhr (OFF, RESTRICTED, ALL)."
     }
   }
 }

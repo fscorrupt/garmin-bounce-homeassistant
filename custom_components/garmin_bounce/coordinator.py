@@ -13,6 +13,18 @@ from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 
+import math
+
+def haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the great circle distance in meters between two coordinates."""
+    R = 6371000.0  # Earth radius in meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
+    return 2.0 * R * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+
+
 class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
     """Class to manage fetching Garmin Bounce and Jr. data from the cloud."""
 
@@ -40,7 +52,7 @@ class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             raise UpdateFailed(f"Error communicating with Garmin API: {err}") from err
 
     def _update_data_sync(self) -> Dict[str, Any]:
-        """Synchronously retrieve family, activity, tracker telemetry, and messages."""
+        """Synchronously retrieve family, activity, tracker telemetry, messages, settings, and zones."""
         family_info = self.api.get_family_info()
         families = family_info.get("families", [])
 
@@ -136,7 +148,42 @@ class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                         "reported_time": tp.get("reportedTime"),
                     }
 
-                # 4. Filter and structure chat history for this child
+                # 4. Fetch canned messages and safety zones
+                canned_messages = self.api.get_canned_messages(kid_id)
+                geofences = self.api.get_geofences(kid_id)
+
+                # 5. Calculate current safety zone via Haversine distance
+                cur_lat = latest_point.get("latitude")
+                cur_lon = latest_point.get("longitude")
+                matched_zone = "Außerhalb"
+                zones_with_distance = []
+                min_dist = float("inf")
+
+                for gf in geofences:
+                    z_name = gf.get("name", "Zone")
+                    z_lat = gf.get("latitude")
+                    z_lon = gf.get("longitude")
+                    z_rad = gf.get("radius", 50)
+                    dist = None
+                    if cur_lat is not None and cur_lon is not None and z_lat is not None and z_lon is not None:
+                        dist = round(haversine_distance_meters(cur_lat, cur_lon, z_lat, z_lon), 1)
+                        if dist <= (z_rad + 20) and dist < min_dist:
+                            min_dist = dist
+                            matched_zone = z_name
+
+                    zones_with_distance.append({
+                        "name": z_name,
+                        "latitude": z_lat,
+                        "longitude": z_lon,
+                        "radius": z_rad,
+                        "distance_meters": dist,
+                        "status": gf.get("status", "ENABLED"),
+                    })
+
+                # 6. Fetch device settings (School Mode, DND)
+                settings = self.api.get_device_settings(device_id, connect_id)
+
+                # 7. Filter and structure chat history for this child
                 child_chat: List[Dict[str, Any]] = []
                 for msg in raw_messages:
                     from_pk = msg.get("fromUserProfilePk")
@@ -193,6 +240,10 @@ class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                     "last_sync_date": last_sync_date,
                     "subscription": subscription,
                     "telemetry": latest_point,
+                    "settings": settings,
+                    "canned_messages": canned_messages,
+                    "geofences": zones_with_distance,
+                    "current_zone": matched_zone,
                     "chat_history": child_chat[:20],
                     "last_message": last_message,
                 }

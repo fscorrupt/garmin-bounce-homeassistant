@@ -18,6 +18,15 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import GarminBounceDataUpdateCoordinator
 
+def _format_seconds_to_time(seconds: Any) -> str:
+    """Format seconds from midnight to HH:MM string."""
+    if not isinstance(seconds, (int, float)):
+        return str(seconds or "")
+    hours = int(seconds) // 3600
+    minutes = (int(seconds) % 3600) // 60
+    return f"{hours:02d}:{minutes:02d}"
+
+
 SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="battery_level",
@@ -70,6 +79,21 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         key="last_message",
         name="Last Message",
         icon="mdi:message-text-clock",
+    ),
+    SensorEntityDescription(
+        key="safety_zone",
+        name="Safety Zone",
+        icon="mdi:map-marker-radius",
+    ),
+    SensorEntityDescription(
+        key="school_mode_status",
+        name="School Mode Status",
+        icon="mdi:school",
+    ),
+    SensorEntityDescription(
+        key="dnd_status",
+        name="Do Not Disturb Status",
+        icon="mdi:bell-off",
     ),
 )
 
@@ -168,6 +192,14 @@ class GarminBounceSensor(CoordinatorEntity[GarminBounceDataUpdateCoordinator], S
                 val = f"{sender}: {txt}" if sender else txt
                 return val[:255]
             return "Keine Nachrichten"
+        if k == "safety_zone":
+            return dev.get("current_zone", "Außerhalb")
+        if k == "school_mode_status":
+            sm = dev.get("settings", {}).get("schoolMode", {})
+            return sm.get("mode", "OFF") if isinstance(sm, dict) else "OFF"
+        if k == "dnd_status":
+            dnd = dev.get("settings", {}).get("dndEnabled", False)
+            return "on" if dnd else "off"
 
         return None
 
@@ -185,6 +217,11 @@ class GarminBounceSensor(CoordinatorEntity[GarminBounceDataUpdateCoordinator], S
             }
         if k == "last_message":
             last_msg = self._device_data.get("last_message") or {}
+            canned_list = [
+                m.get("messageText")
+                for m in self._device_data.get("canned_messages", [])
+                if m.get("messageText")
+            ]
             return {
                 "message_id": last_msg.get("message_id"),
                 "sender": last_msg.get("sender"),
@@ -193,6 +230,29 @@ class GarminBounceSensor(CoordinatorEntity[GarminBounceDataUpdateCoordinator], S
                 "media_type": last_msg.get("media_type"),
                 "is_audio": last_msg.get("is_audio", False),
                 "audio_url": last_msg.get("audio_url"),
+                "canned_messages": canned_list,
                 "chat_history": self._device_data.get("chat_history", []),
+            }
+        if k == "safety_zone":
+            return {
+                "zones": self._device_data.get("geofences", []),
+                "current_latitude": self._telemetry.get("latitude"),
+                "current_longitude": self._telemetry.get("longitude"),
+            }
+        if k == "school_mode_status":
+            sm = self._device_data.get("settings", {}).get("schoolMode", {})
+            if isinstance(sm, dict):
+                return {
+                    "mode": sm.get("mode", "OFF"),
+                    "start_time": _format_seconds_to_time(sm.get("startTime")),
+                    "end_time": _format_seconds_to_time(sm.get("endTime")),
+                    "days": sm.get("days", []),
+                }
+            return {}
+        if k == "dnd_status":
+            settings = self._device_data.get("settings", {})
+            return {
+                "dnd_enabled": bool(settings.get("dndEnabled", False)),
+                "sound_vibration_enabled": settings.get("soundVibrationEnabled"),
             }
         return {}
