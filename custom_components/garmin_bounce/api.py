@@ -121,24 +121,52 @@ class GarminBounceApiClient:
             return resp.json()
         return {}
 
-    def get_trackpoints(self, kid_connect_id: int, days_back: int = 7) -> List[Dict[str, Any]]:
-        """Fetch GPS trackpoints and battery telemetry from GCS."""
-        begin_iso = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        url = f"{URL_GCS_TRACKPOINTS}?kidProfileId={kid_connect_id}&begin={begin_iso}&limit=10"
-        
-        try:
-            resp = requests.get(url, headers=self._get_gcs_headers(), timeout=15)
-            if resp.status_code == 401:
-                # Token may have expired, re-exchange once
-                _LOGGER.info("GCS token expired, attempting re-exchange...")
-                self.exchange_it_token()
-                resp = requests.get(url, headers=self._get_gcs_headers(), timeout=15)
+    def get_trackpoints(self, kid_connect_id: int) -> List[Dict[str, Any]]:
+        """Fetch latest GPS trackpoints and battery telemetry from GCS."""
+        headers = self._get_gcs_headers()
+        # Query recent window first (last 24h), fallback to 72h or 7 days if watch was offline/asleep
+        for hours_back in (24, 72, 168):
+            begin_iso = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).strftime(
+                "%Y-%m-%dT%H:%M:%S.000Z"
+            )
+            url = f"{URL_GCS_TRACKPOINTS}?kidProfileId={kid_connect_id}&begin={begin_iso}&limit=50"
+            try:
+                resp = requests.get(url, headers=headers, timeout=15)
+                if resp.status_code == 401:
+                    # Token may have expired, re-exchange once
+                    _LOGGER.info("GCS token expired, attempting re-exchange...")
+                    self.exchange_it_token()
+                    headers = self._get_gcs_headers()
+                    resp = requests.get(url, headers=headers, timeout=15)
 
-            if resp.status_code == 200:
-                return resp.json()
-            _LOGGER.warning("Trackpoint fetch returned HTTP %s: %s", resp.status_code, resp.text)
-        except Exception as err:
-            _LOGGER.error("Error fetching trackpoints for %s: %s", kid_connect_id, err)
+                if resp.status_code == 200:
+                    points = resp.json()
+                    if points:
+                        # Page forward if limit=50 was reached so we reach the absolute newest trackpoints
+                        while len(points) >= 50:
+                            last_time = points[-1].get("reportedTime") or points[-1].get("dateTime")
+                            if not last_time:
+                                break
+                            next_url = f"{URL_GCS_TRACKPOINTS}?kidProfileId={kid_connect_id}&begin={last_time}&limit=50"
+                            resp_next = requests.get(next_url, headers=headers, timeout=15)
+                            if resp_next.status_code != 200:
+                                break
+                            next_page = resp_next.json()
+                            new_points = [
+                                p for p in next_page
+                                if (p.get("reportedTime") or p.get("dateTime")) > last_time
+                            ]
+                            if not new_points:
+                                break
+                            points.extend(new_points)
+                            if len(next_page) < 50:
+                                break
+                        return points
+                else:
+                    _LOGGER.warning("Trackpoint fetch returned HTTP %s: %s", resp.status_code, resp.text)
+            except Exception as err:
+                _LOGGER.error("Error fetching trackpoints for %s: %s", kid_connect_id, err)
+                break
         return []
 
     def request_location_update(self, device_id: str) -> bool:

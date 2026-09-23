@@ -107,11 +107,17 @@ class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 last_sync_date = activity_today.get("lastSyncDate") or activity_yesterday.get("lastSyncDate")
 
                 # 3. Fetch latest trackpoints (GPS, battery, telemetry)
-                trackpoints = self.api.get_trackpoints(connect_id, days_back=7)
+                trackpoints = self.api.get_trackpoints(connect_id)
                 latest_point: Dict[str, Any] = {}
 
                 if trackpoints:
-                    tp = trackpoints[0]
+                    # Sort descending so index 0 is always the absolute newest trackpoint
+                    sorted_trackpoints = sorted(
+                        trackpoints,
+                        key=lambda x: x.get("reportedTime") or x.get("dateTime") or "",
+                        reverse=True,
+                    )
+                    tp = sorted_trackpoints[0]
                     pos = tp.get("position", {})
                     lat_semi = pos.get("lat") or pos.get("latitudeSemicircles")
                     lon_semi = pos.get("lon") or pos.get("longitudeSemicircles")
