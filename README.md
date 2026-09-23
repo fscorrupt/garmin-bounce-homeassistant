@@ -24,6 +24,7 @@ Integrate your **Garmin Bounce 2** (and Garmin Vivofit Jr. smartwatches) directl
 - 📡 **Remote Location Refresh Button**: Send an on-demand LTE wake-up instruction (`button.*_refresh_location`) to force the watch to take an immediate GPS fix.
 - 📡 **LiveTrack Mode**: Start high-frequency LTE tracking session (`button.*_start_livetrack`).
 - 🔄 **Cloud Sync Trigger**: Force an instant cloud re-poll (`button.*_poll_cloud_data`) without waiting for the scan interval.
+- ⚡ **Configurable Cloud Polling**: Set your preferred polling interval (15s – 1800s, default 60s) via Options Flow with zero watch battery drain.
 - 🔐 **Garmin 2FA / MFA Support**: Handles two-factor authentication codes natively in the Home Assistant UI during setup.
 
 ---
@@ -47,11 +48,22 @@ Integrate your **Garmin Bounce 2** (and Garmin Vivofit Jr. smartwatches) directl
 
 ## ⚙️ Configuration
 
+### Initial Setup
 1. In Home Assistant, go to **Settings** > **Devices & Services** > **Add Integration**.
 2. Search for **Garmin Bounce & Jr.**.
 3. Enter your Garmin Connect account **Email** and **Password**.
 4. If your account has two-factor authentication enabled, enter the 6-digit **MFA Code** sent to your email or SMS.
 5. The integration will automatically discover all families, kids, and Bounce watches registered to your account!
+
+### Options & Cloud Polling Interval
+You can customize how frequently Home Assistant checks Garmin Cloud for updated GPS coordinates and sensor metrics:
+1. Go to **Settings** > **Devices & Services** > **Garmin Bounce & Jr.**.
+2. Click **Configure** (Konfigurieren).
+3. Set the **Cloud Polling Interval** in seconds (range: `15` to `1800` seconds; default: `60` seconds).
+4. Click **Submit**. The integration reloads immediately with the new update interval without requiring a Home Assistant restart.
+
+> [!TIP]
+> **Zero Watch Battery Consumption:** Polling queries Garmin's Cloud servers (`api.gcs.garmin.com`) directly from Home Assistant. It does **not** communicate with the watch over LTE or wake it up. When the watch sends updated location data to Garmin (e.g. crossing a geofence), Home Assistant will pick it up almost immediately on its next poll cycle.
 
 ---
 
