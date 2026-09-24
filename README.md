@@ -1,6 +1,5 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/fscorrupt/garmin-bounce-homeassistant/main/icon.png" alt="Garmin Bounce Home Assistant" width="140" height="140">
-  <img src="https://raw.githubusercontent.com/fscorrupt/garmin-bounce-homeassistant/main/icon.png" alt="Garmin Bounce Home Assistant" width="140" height="140">
 </p>
 
 # Garmin Bounce & Garmin Jr. - Home Assistant Integration
