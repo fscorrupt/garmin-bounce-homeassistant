@@ -22,6 +22,8 @@
 # ------------------------------------------------------------------------------
 # VIEW 1: Modern Mushroom All-in-One Dashboard Card
 # (Requires HACS 'Mushroom' and 'stack-in-card')
+# VIEW 1: Modern Mushroom All-in-One Dashboard Card
+# (Requires HACS 'Mushroom' and 'stack-in-card')
 # ------------------------------------------------------------------------------
 type: custom:stack-in-card
 mode: vertical
@@ -197,16 +199,16 @@ cards:
       {% if history %}
         {% for m in history[:8] %}
           {% if m.direction == 'incoming' %}
-            > 👧 **{{ m.sender }}** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 👧 **{{ m.sender }}** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > {{ m.text }}
-            {% if m.is_audio and m.audio_url %}  
+            {% if m.is_audio and m.audio_url %}
             > <audio controls src="{{ m.audio_url }}" style="width: 100%; height: 35px; margin-top: 4px;"></audio>
             {% endif %}
           {% elif m.direction == 'outgoing' %}
-            > 📱 **Du / Eltern** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 📱 **Du / Eltern** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > *{{ m.text }}*
           {% else %}
-            > 👨‍👩‍👧 **Familienchat** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 👨‍👩‍👧 **Familienchat** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > *{{ m.sender }}:* {{ m.text }}
           {% endif %}
 
@@ -221,6 +223,7 @@ cards:
 # ==============================================================================
 type: vertical-stack
 title: "Garmin Bounce 2 - All-in-One"
+title: "Garmin Bounce 2 - All-in-One"
 cards:
   # 1. Live Map Card
   - type: map
@@ -231,6 +234,7 @@ cards:
     default_zoom: 16
     aspect_ratio: "16:9"
 
+  # 2. Telemetry Glance Card
   # 2. Telemetry Glance Card
   - type: glance
     show_name: true
@@ -263,9 +267,11 @@ cards:
         name: "Nicht Stören (DND)"
 
   # 4. Trigger & Control Buttons
+  # 4. Trigger & Control Buttons
   - type: horizontal-stack
     cards:
       - type: button
+        name: "Ortung (LTE)"
         name: "Ortung (LTE)"
         icon: mdi:crosshairs-gps
         tap_action:
@@ -276,6 +282,7 @@ cards:
 
       - type: button
         name: "LiveTrack"
+        name: "LiveTrack"
         icon: mdi:radar
         tap_action:
           action: call-service
@@ -284,6 +291,7 @@ cards:
             entity_id: button.mia_bounce_2_start_livetrack
 
       - type: button
+        name: "Cloud Sync"
         name: "Cloud Sync"
         icon: mdi:cloud-sync
         tap_action:
@@ -338,16 +346,16 @@ cards:
       {% if history %}
         {% for m in history[:8] %}
           {% if m.direction == 'incoming' %}
-            > 👧 **{{ m.sender }}** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 👧 **{{ m.sender }}** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > {{ m.text }}
-            {% if m.is_audio and m.audio_url %}  
+            {% if m.is_audio and m.audio_url %}
             > <audio controls src="{{ m.audio_url }}" style="width: 100%; height: 35px;"></audio>
             {% endif %}
           {% elif m.direction == 'outgoing' %}
-            > 📱 **Du / Eltern** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 📱 **Du / Eltern** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > *{{ m.text }}*
           {% else %}
-            > 👨‍👩‍👧 **Familienchat** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > 👨‍👩‍👧 **Familienchat** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):
             > *{{ m.sender }}:* {{ m.text }}
           {% endif %}
 
