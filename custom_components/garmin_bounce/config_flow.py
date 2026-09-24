@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResult
 from garminconnect import (
@@ -176,6 +177,7 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
+    @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
@@ -186,9 +188,28 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class GarminBounceOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Garmin Bounce."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry: Optional[config_entries.ConfigEntry] = None) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        try:
+            super().__init__(config_entry)
+        except TypeError:
+            super().__init__()
+        self._config_entry = config_entry
+
+    @property
+    def config_entry(self) -> Optional[config_entries.ConfigEntry]:
+        """Return the config entry."""
+        if hasattr(self, "_config_entry") and self._config_entry is not None:
+            return self._config_entry
+        try:
+            return super().config_entry
+        except Exception:
+            return None
+
+    @config_entry.setter
+    def config_entry(self, value: config_entries.ConfigEntry) -> None:
+        """Set the config entry."""
+        self._config_entry = value
 
     async def async_step_init(
         self, user_input: Optional[Dict[str, Any]] = None
@@ -197,8 +218,11 @@ class GarminBounceOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_interval = self.config_entry.options.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS
+        entry = self.config_entry
+        current_interval = (
+            entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
+            if entry and hasattr(entry, "options")
+            else DEFAULT_SCAN_INTERVAL_SECONDS
         )
 
         return self.async_show_form(

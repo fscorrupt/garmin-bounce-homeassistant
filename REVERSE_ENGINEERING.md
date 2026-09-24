@@ -41,8 +41,11 @@ sequenceDiagram
     actor User as Home Assistant / Python PoC
     participant SSO as sso.garmin.com
     participant ITAuth as services.garmin.com
+    participant DIExchange as diauth.garmin.com
+    participant KidAuth as connectapi.garmin.com
     participant VivoAPI as vivokidapi.garmin.com
     participant GCS as api.gcs.garmin.com
+    participant DevSvc as connectapi.garmin.com
     participant Watch as Garmin Bounce 2 (LTE)
 
     Note over User,SSO: Phase 1: SSO Authentication
@@ -57,32 +60,40 @@ sequenceDiagram
     User->>ITAuth: POST /api/oauth/token?grant_type=connect2_exchange<br/>client_id=VIVOFIT_JR_ANDROID & connect_access_token=DI_TOKEN
     ITAuth-->>User: IT Bearer Token (iss: services.garmin.com, Scopes: GCS_TRACKER, etc.)
 
-    Note over User,GCS: Phase 4: Live Telemetry & Location Wake-Up
+    Note over User,GCS: Phase 4: Live Telemetry, Messaging & Geofences
     User->>GCS: GET /tracker/family/api/v1/trackpoints?kidProfileId=CONNECT_ID (IT Token)
     GCS-->>User: GPS Semicircles, Battery %, Charging State, Fix Type, Satellites
+    User->>GCS: GET /tracker/family/api/v1/geofences?familyId=FAMILY_ID (IT Token)
+    GCS-->>User: Safety Zones (Zuhause, Schule, Hort, Oma, etc.)
 
-    opt Remote On-Demand Location Refresh
-        User->>GCS: POST /device-instruction/api/v1/family/{deviceId}/update-location (IT Token)
-        GCS->>Watch: Wake-up instruction over LTE
-        Watch-->>GCS: New GPS Fix Upload
-    end
+    Note over User,DevSvc: Phase 5: Kid Token Exchange & Device Settings (School Mode / DND)
+    User->>DIExchange: POST /oauth/exchange/user/it_token (grant_type=token-exchange)
+    DIExchange-->>User: Jr DI Token
+    User->>KidAuth: POST /di-oauth2-service/oauth/grant/gc_kid (gc_kid_id=CONNECT_ID)
+    KidAuth-->>User: Kid-Scoped Bearer Token
+    User->>DevSvc: GET/PUT /device-service/deviceservice/device-info/settings/{deviceId}
+    DevSvc->>Watch: Push School Mode / DND Setting over LTE
 ```
 
-### The Dual-Backend Split
+### The Three Backend Systems
 1. **`vivokidapi.garmin.com`**:
    - Host for family structures, child accounts, chores, step challenges, and LTE subscription billing status.
    - Authorized via the standard **Garmin Connect Mobile DI Token** (`Authorization: Bearer <di_token>`).
-   - Does **not** require strict mobile device WAF checks.
 2. **`api.gcs.garmin.com`**:
-   - Host for real-time tracking, GPS coordinates, geofences, and remote LTE device instructions.
+   - Host for real-time tracking, GPS coordinates, geofences, LTE push instructions, and chat messaging.
    - Protected by Cloudflare WAF and strict JWT issuer validation.
-   - **Crucial discovery:** It **rejects** DI tokens (`iss: https://diauth.garmin.com`) with `HTTP 401 Invalid Issuer`. It strictly requires an **IT OAuth Token** (`iss: https://services.garmin.com`).
+   - **Crucial discovery:** It **rejects** parent DI tokens (`iss: https://diauth.garmin.com`) with `HTTP 401 Invalid Issuer`. It strictly requires an **IT OAuth Token** (`iss: https://services.garmin.com`).
+3. **`connectapi.garmin.com`**:
+   - Host for device firmware settings, School Mode scheduling, and Do Not Disturb configuration (`device-service`).
+   - Requires a **Kid-Scoped Bearer Token** derived through a 2-step token exchange.
 
 ---
 
-## 3. The Missing Link: IT OAuth Token Exchange
+## 3. The Authentication Token Hierarchy
 
-When decompiling the APK's mobile authentication library (`smali_classes4/g6/e.smali`, `i6/b.smali`, `l6/c.smali`), we discovered the internal exchange mechanism:
+### 3.1 IT OAuth Token Exchange (for GCS Tracking & Messaging)
+
+Decompiled from `smali_classes4/g6/e.smali`, `i6/b.smali`, `l6/c.smali`:
 
 ```http
 POST https://services.garmin.com/api/oauth/token?grant_type=connect2_exchange HTTP/1.1
@@ -94,7 +105,7 @@ Accept: application/json
 client_id=VIVOFIT_JR_ANDROID&connect_access_token=<YOUR_DI_TOKEN>
 ```
 
-### Response (HTTP 200 OK):
+#### Response (HTTP 200 OK):
 ```json
 {
   "access_token": "ic201jyr-hiu6-h5kv-6lvy-gly80ssh3k3u",
@@ -106,10 +117,48 @@ client_id=VIVOFIT_JR_ANDROID&connect_access_token=<YOUR_DI_TOKEN>
 }
 ```
 
-Notice the granted scopes:
-- `GCS_FAMILY_TRACKER_READ`: Grants read access to GPS coordinates and battery telemetry.
-- `GCS_DEVICE_INSTRUCTION_CREATE`: Grants permission to send LTE commands to the watch.
-- `GCS_MESSAGING_FAMILY_CREATE / READ`: Text and audio messaging with the watch.
+Granted scopes:
+- `GCS_FAMILY_TRACKER_READ`: Read GPS coordinates, battery telemetry, and geofences.
+- `GCS_DEVICE_INSTRUCTION_CREATE`: Dispatch LTE commands (instant GPS wake-up, LiveTrack).
+- `GCS_MESSAGING_FAMILY_CREATE / READ`: Read and send text and audio messages.
+
+---
+
+### 3.2 Kid-Scoped Bearer Token Exchange (for Device Settings & Modes)
+
+Decompiled from `smali_classes4/v6/v.smali` (`UserUtil.g(str)`), `ddm.smali`, and `sfc.smali`:
+
+Because the Bounce 2 belongs to the child's identity rather than the parent's Garmin Connect profile, modifying watch settings (School Mode, DND) requires an authorization token specifically scoped to the child (`gc_kid_id`).
+
+#### Step A: Exchange IT Token for a Jr DI Token
+```http
+POST https://diauth.garmin.com/oauth/exchange/user/it_token HTTP/1.1
+Host: diauth.garmin.com
+User-Agent: GarminJr/5.23 (Android)
+Content-Type: application/x-www-form-urlencoded
+
+client_id=VIVOFIT_JR_ANDROID&grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token=<IT_TOKEN>&subject_token_type=urn:ietf:params:oauth:token-type:access_token
+```
+
+#### Step B: Exchange Jr DI Token for Kid-Scoped Bearer Token
+```http
+POST https://connectapi.garmin.com/di-oauth2-service/oauth/grant/gc_kid HTTP/1.1
+Host: connectapi.garmin.com
+User-Agent: GarminJr/5.23 (Android)
+Authorization: Bearer <JR_DI_TOKEN>
+Content-Type: application/x-www-form-urlencoded
+
+client_id=GarminConnectMobile&gc_kid_id=<CHILD_CONNECT_ID>
+```
+
+#### Response (HTTP 200 OK):
+```json
+{
+  "access_token": "eyJraWQiOiJnY3Bka...<JWT_KID_TOKEN>",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
 
 ---
 
@@ -127,9 +176,10 @@ def semicircles_to_degrees(semicircles: int) -> float:
         return 0.0
     return round(semicircles * (180.0 / 2**31), 6)
 
-# Example:
-# lat = 626749964  -> 626749964 * (180 / 2**31) = 52.520008° N
-# lon = 159987820  -> 159987820 * (180 / 2**31) = 13.404954° E
+def degrees_to_semicircles(degrees: float) -> int:
+    if degrees is None:
+        return 0
+    return int(degrees * (2**31 / 180.0))
 ```
 
 ---
@@ -167,7 +217,7 @@ def semicircles_to_degrees(semicircles: int) -> float:
 > [!NOTE]
 > Each child profile has **two distinct IDs**:
 > - `id` (e.g. `20000001`): Used for **Vivokid activity summaries**.
-> - `connectId` (e.g. `30000001`): Used for **GCS tracker trackpoints** (passed as parameter `kidProfileId`).
+> - `connectId` (e.g. `30000001`): Used for **GCS tracker trackpoints** (passed as parameter `kidProfileId`) and kid token exchange (`gc_kid_id`).
 
 ---
 
@@ -209,8 +259,8 @@ def semicircles_to_degrees(semicircles: int) -> float:
 ```json
 [
   {
-    "dateTime": "2026-09-16T13:09:14.000Z",
-    "reportedTime": "2026-09-16T13:09:16.310Z",
+    "dateTime": "2026-09-23T13:09:14.000Z",
+    "reportedTime": "2026-09-23T13:09:16.310Z",
     "position": {
       "lat": 626749964,
       "lon": 159987820
@@ -238,13 +288,13 @@ def semicircles_to_degrees(semicircles: int) -> float:
 ```
 
 #### Fix Types
-- `GPS`: Traditional satellite fix.
+- `GPS`: High-precision GNSS satellite fix.
 - `WFPS`: Wi-Fi Positioning System (lookup against nearby BSSID hotspots).
-- `WFPS_ANCHOR`: Geofenced fixed Wi-Fi home/school base anchor.
+- `WFPS_ANCHOR`: Geofenced fixed Wi-Fi home/school base anchor (preserves battery).
 
 ---
 
-### 5. On-Demand Location Refresh (LTE Wake-Up Ping)
+### 5. Remote Location Refresh (LTE Wake-Up Ping)
 - **URL**: `POST https://api.gcs.garmin.com/device-instruction/api/v1/family/{deviceId}/update-location`
 - **Auth**: `Authorization: Bearer <IT_TOKEN>`
 - **Payload**: None (empty body)
@@ -253,7 +303,93 @@ def semicircles_to_degrees(semicircles: int) -> float:
 
 ---
 
-### 6. Messaging & Chat History (GCS Messaging Service)
+### 6. LiveTrack Session
+- **URL**: `POST https://api.gcs.garmin.com/device-instruction/api/v1/family/{deviceId}/start-livetrack`
+- **Auth**: `Authorization: Bearer <IT_TOKEN>`
+- **Payload**: None (empty body)
+- **Response**: `HTTP 200 OK`
+- **Behavior**: Instructs the watch to maintain continuous real-time GPS tracking transmitted over LTE.
+
+---
+
+### 7. Safety Zones (Geofencing)
+- **URL**: `GET https://api.gcs.garmin.com/tracker/family/api/v1/geofences?familyId={familyId}`
+- **Auth**: `Authorization: Bearer <IT_TOKEN>`
+- **Response**:
+```json
+[
+  {
+    "geofenceId": 100001,
+    "familyId": 12345678,
+    "name": "Zuhause",
+    "center": {
+      "lat": 626749964,
+      "lon": 159987820
+    },
+    "radius": 150.0,
+    "shapeType": "CIRCLE"
+  },
+  {
+    "geofenceId": 100002,
+    "familyId": 12345678,
+    "name": "Schule",
+    "center": {
+      "lat": 626785000,
+      "lon": 160012000
+    },
+    "radius": 200.0,
+    "shapeType": "CIRCLE"
+  }
+]
+```
+
+#### Real-time Geofence Evaluation (Haversine Formula)
+Home Assistant calculates the child's distance to every configured safety zone in real time:
+$$d = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)}\right)$$
+If $d \le \text{radius}$, `sensor.<child>_safety_zone` reports the zone name (e.g. `Zuhause`). If outside all zones, it reports `Außerhalb` with distance to the nearest zone.
+
+---
+
+### 8. Device Settings: School Mode & Do Not Disturb (DND)
+
+- **Get Device Settings**: `GET https://connectapi.garmin.com/device-service/deviceservice/device-info/settings/{deviceId}`
+- **Update Device Settings**: `PUT https://connectapi.garmin.com/device-service/deviceservice/device-info/settings/{deviceId}`
+- **Auth**: `Authorization: Bearer <KID_BEARER_TOKEN>`
+- **Content-Type**: `application/json`
+
+#### Payload Schema (Settings):
+```json
+{
+  "schoolMode": {
+    "schoolModeSetting": "RESTRICTED",
+    "schoolModeDays": [
+      {
+        "dayOfWeek": 2,
+        "schoolModeTimeIntervals": [
+          {
+            "startTime": "08:00:00",
+            "endTime": "13:00:00"
+          }
+        ]
+      }
+    ]
+  },
+  "doNotDisturb": {
+    "enabled": false,
+    "vibrationEnabled": true
+  }
+}
+```
+
+#### School Mode Values:
+- `"OFF"`: Normal operation. All features, games, and communications available.
+- `"RESTRICTED"`: Only watch face and emergency contacts allowed. Distractions blocked.
+- `"ALL"`: Strict mode. All interactions locked during school hours.
+
+---
+
+### 9. Messaging & Chat History (GCS Messaging Service)
+
 - **Read Messages**: `GET https://api.gcs.garmin.com/messaging/family/api/v1/guardian/messages?after={ISO8601}&limit=50&audioMediaType=audio/ogg`
   - **Auth**: `Authorization: Bearer <IT_TOKEN>`
   - **Response (HTTP 200 OK)**:
@@ -301,7 +437,8 @@ def semicircles_to_degrees(semicircles: int) -> float:
 
 ---
 
-### 7. Voice Messages (Audio / Ogg Opus)
+### 10. Voice Messages (Audio / Ogg Opus)
+
 - **Download Voice Recording**: `GET https://api.gcs.garmin.com/messaging/family/api/v1/messages/{messageId}/content`
   - **Auth**: `Authorization: Bearer <IT_TOKEN>`
   - **Response**: `HTTP 200 OK` (Content-Type: `audio/ogg`, raw Opus audio payload)
@@ -310,3 +447,23 @@ def semicircles_to_degrees(semicircles: int) -> float:
   - **Body**: Multipart form with part named `audio` (`audio/ogg`)
   - **Response**: `HTTP 201 Created`
 
+---
+
+### 11. Canned Template Messages
+
+The Bounce 2 firmware supports quick-reply canned message templates:
+1. `Ja`
+2. `Nein`
+3. `OK`
+4. `Ich liebe dich ❤️`
+5. `Bis gleich!`
+6. `Bin auf dem Weg!`
+7. `Kannst du mich abholen?`
+8. `Bin bei der Schule.`
+9. `Bin zuhause.`
+10. `Essen ist fertig!`
+11. `Bitte ruf mich an!`
+12. `Alles gut!`
+13. `Gleich da!`
+14. `Warte auf mich.`
+15. `Hab dich lieb!`

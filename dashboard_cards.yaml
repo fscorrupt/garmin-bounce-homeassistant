@@ -1,75 +1,340 @@
 # ==============================================================================
 # Home Assistant Dashboard Cards for Garmin Bounce 2 & Garmin Jr.
 # ==============================================================================
+#
+# INSTRUCTIONS:
+# 1. To enable typing custom messages directly from the dashboard:
+#    Go to Settings > Devices & Services > Helpers > Create Helper > Text
+#    Name: "Garmin Bounce Nachricht"
+#    Entity ID: input_text.garmin_bounce_message
+#    (Or add to configuration.yaml:
+#       input_text:
+#         garmin_bounce_message:
+#           name: "Nachricht an Uhr"
+#           max: 200
+#    )
+#
+# 2. Adjust entity names below to match your child's entities (e.g. replace 'mia'
+#    with your child's name as created by Home Assistant).
+#    The integration automatically empties the text box after sending!
+# ==============================================================================
 
 # ------------------------------------------------------------------------------
-# OPTION 1: Native Home Assistant Cards (No HACS plugins required)
+# VIEW 1: Modern Mushroom All-in-One Dashboard Card
+# (Requires HACS 'Mushroom' and 'stack-in-card')
 # ------------------------------------------------------------------------------
+type: custom:stack-in-card
+mode: vertical
+cards:
+  # 1. Live GPS Map
+  - type: map
+    entities:
+      - entity: device_tracker.mia_bounce_2
+      # Or: - entity: person.mia
+    hours_to_show: 12
+    default_zoom: 16
+    aspect_ratio: "16:9"
+
+  # 2. Status Chips (Battery, Steps, LTE, Safety Zone)
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: entity
+        entity: sensor.mia_bounce_2_battery_level
+        icon_color: green
+      - type: entity
+        entity: sensor.mia_bounce_2_daily_steps
+        icon_color: blue
+      - type: entity
+        entity: sensor.mia_bounce_2_lte_status
+        icon_color: orange
+      - type: entity
+        entity: sensor.mia_bounce_2_safety_zone
+        icon_color: purple
+
+  # 3. Mode Controls: School Mode & Do Not Disturb
+  - type: horizontal-stack
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: switch.mia_bounce_2_school_mode
+        name: "Schulmodus"
+        icon_color: amber
+        tap_action:
+          action: toggle
+
+      - type: custom:mushroom-entity-card
+        entity: switch.mia_bounce_2_do_not_disturb
+        name: "Nicht Stören"
+        icon_color: red
+        tap_action:
+          action: toggle
+
+  # 4. Action Buttons (LTE GPS Wakeup, LiveTrack, Cloud Sync)
+  - type: horizontal-stack
+    cards:
+      - type: custom:mushroom-template-card
+        primary: "Ortung (LTE)"
+        secondary: "GPS aufwecken"
+        icon: mdi:crosshairs-gps
+        icon_color: red
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.mia_bounce_2_refresh_location
+
+      - type: custom:mushroom-template-card
+        primary: "LiveTrack"
+        secondary: "Tracking starten"
+        icon: mdi:radar
+        icon_color: deep-purple
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.mia_bounce_2_start_livetrack
+
+      - type: custom:mushroom-template-card
+        primary: "Cloud Sync"
+        secondary: "Jetzt abfragen"
+        icon: mdi:cloud-sync
+        icon_color: blue
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.mia_bounce_2_poll_cloud_data
+
+  # 5. Custom Manual Text Message Input Box
+  - type: entities
+    title: "✍️ Eigene Nachricht an die Uhr senden"
+    show_header_toggle: false
+    entities:
+      - entity: input_text.garmin_bounce_message
+        name: "Nachricht eingeben"
+
+  # 6. Send Buttons for the Custom Text Input
+  - type: horizontal-stack
+    cards:
+      - type: custom:mushroom-template-card
+        primary: "An Uhr senden"
+        secondary: "Direktnachricht"
+        icon: mdi:send
+        icon_color: green
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "input_text.garmin_bounce_message"
+
+      - type: custom:mushroom-template-card
+        primary: "An Familienchat"
+        secondary: "Gruppe"
+        icon: mdi:account-group
+        icon_color: teal
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "family"
+            message: "input_text.garmin_bounce_message"
+
+  # 7. Quick Message Presets Dropdown
+  - type: entities
+    title: "⚡ Schnellauswahl Vorlagen"
+    show_header_toggle: false
+    entities:
+      - entity: select.mia_bounce_2_quick_message
+        name: "Vorlage sofort senden"
+
+  # 8. Quick 1-Click Message Chips
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: action
+        icon: mdi:silverware-fork-knife
+        content: "Essen fertig"
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "Das Essen ist fertig! Bitte komm jetzt an den Tisch."
+      - type: action
+        icon: mdi:home-alert
+        content: "Nach Hause"
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "Bitte mach dich jetzt auf den Heimweg!"
+      - type: action
+        icon: mdi:map-marker-question
+        content: "Wo bist du?"
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "Wo bist du gerade? Bitte melde dich kurz."
+      - type: action
+        icon: mdi:phone
+        content: "Ruf an"
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "Bitte ruf mich kurz an!"
+
+  # 9. Live Chatverlauf & Voice Message Audio Player
+  - type: markdown
+    title: "💬 Chatverlauf mit der Uhr"
+    content: >
+      {% set history = state_attr('sensor.mia_bounce_2_last_message', 'chat_history') %}
+      {% if history %}
+        {% for m in history[:8] %}
+          {% if m.direction == 'incoming' %}
+            > 👧 **{{ m.sender }}** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > {{ m.text }}
+            {% if m.is_audio and m.audio_url %}  
+            > <audio controls src="{{ m.audio_url }}" style="width: 100%; height: 35px; margin-top: 4px;"></audio>
+            {% endif %}
+          {% elif m.direction == 'outgoing' %}
+            > 📱 **Du / Eltern** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > *{{ m.text }}*
+          {% else %}
+            > 👨‍👩‍👧 **Familienchat** ({{ as_timestamp(m.timestamp) | timestamp_custom('%H:%M', true) }}):  
+            > *{{ m.sender }}:* {{ m.text }}
+          {% endif %}
+
+        {% endfor %}
+      {% else %}
+        *Noch keine Nachrichten vorhanden.*
+      {% endif %}
+
+
+# ==============================================================================
+# VIEW 2: Native Home Assistant Cards (Zero HACS plugins required)
+# ==============================================================================
 type: vertical-stack
-title: "👧 Mia – Garmin Bounce 2"
+title: "Garmin Bounce 2 - All-in-One"
 cards:
   # 1. Live Map Card
   - type: map
     entities:
       - entity: device_tracker.mia_bounce_2
+      # Or: - entity: person.mia
     hours_to_show: 24
     default_zoom: 16
     aspect_ratio: "16:9"
 
-  # 2. Glance Card with Battery, Steps, LTE & Sync Telemetry
+  # 2. Telemetry Glance Card
   - type: glance
     show_name: true
     show_icon: true
     show_state: true
     entities:
-      - entity: sensor.mia_battery_level
-        name: Battery
-      - entity: sensor.mia_daily_steps
-        name: Steps Today
-      - entity: sensor.mia_step_goal
-        name: Step Goal
-      - entity: sensor.mia_lte_status
+      - entity: sensor.mia_bounce_2_battery_level
+        name: Batterie
+      - entity: sensor.mia_bounce_2_daily_steps
+        name: Schritte heute
+      - entity: sensor.mia_bounce_2_safety_zone
+        name: Sicherheitszone
+      - entity: sensor.mia_bounce_2_lte_status
         name: LTE Status
-      - entity: sensor.mia_location_fix_type
-        name: Fix Type
-      - entity: sensor.mia_last_sync
-        name: Last Sync
+      - entity: sensor.mia_bounce_2_location_fix_type
+        name: Fix Typ
+      - entity: sensor.mia_bounce_2_last_sync
+        name: Letzter Sync
 
-  # 3. Trigger & Control Buttons
+  # 3. Switches & Modes
+  - type: entities
+    title: "Modi & Einstellungen"
+    show_header_toggle: false
+    entities:
+      - entity: switch.mia_bounce_2_school_mode
+        name: "Schulmodus"
+      - entity: select.mia_bounce_2_school_mode_setting
+        name: "Schulmodus Stufe"
+      - entity: switch.mia_bounce_2_do_not_disturb
+        name: "Nicht Stören (DND)"
+
+  # 4. Trigger & Control Buttons
   - type: horizontal-stack
     cards:
       - type: button
-        name: "Locate Watch (LTE)"
+        name: "Ortung (LTE)"
         icon: mdi:crosshairs-gps
         tap_action:
           action: call-service
           service: button.press
           target:
-            entity_id: button.mia_refresh_location
+            entity_id: button.mia_bounce_2_refresh_location
 
       - type: button
-        name: "Start LiveTrack"
+        name: "LiveTrack"
         icon: mdi:radar
         tap_action:
           action: call-service
           service: button.press
           target:
-            entity_id: button.mia_start_livetrack
+            entity_id: button.mia_bounce_2_start_livetrack
 
       - type: button
-        name: "Poll Cloud Data"
+        name: "Cloud Sync"
         icon: mdi:cloud-sync
         tap_action:
           action: call-service
           service: button.press
           target:
-            entity_id: button.mia_poll_cloud_data
+            entity_id: button.mia_bounce_2_poll_cloud_data
 
-  # 4. Chat History & Voice Message Playback
+  # 5. Custom Manual Message Input
+  - type: entities
+    title: "✍️ Eigene Nachricht an die Uhr"
+    show_header_toggle: false
+    entities:
+      - entity: input_text.garmin_bounce_message
+        name: "Text"
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: "An Uhr senden"
+        icon: mdi:send
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "child"
+            message: "input_text.garmin_bounce_message"
+
+      - type: button
+        name: "An Familie senden"
+        icon: mdi:account-group
+        tap_action:
+          action: call-service
+          service: garmin_bounce.send_message
+          service_data:
+            target: "family"
+            message: "input_text.garmin_bounce_message"
+
+  # 6. Quick Message Selection
+  - type: entities
+    title: "⚡ Schnellauswahl Vorlage"
+    show_header_toggle: false
+    entities:
+      - entity: select.mia_bounce_2_quick_message
+        name: "Vorlage senden"
+
+  # 7. Chatverlauf mit Audio Player
   - type: markdown
     title: "💬 Chatverlauf mit der Uhr"
     content: >
-      {% set history = state_attr('sensor.mia_last_message', 'chat_history') %}
+      {% set history = state_attr('sensor.mia_bounce_2_last_message', 'chat_history') %}
       {% if history %}
         {% for m in history[:8] %}
           {% if m.direction == 'incoming' %}
@@ -90,145 +355,3 @@ cards:
       {% else %}
         *Noch keine Nachrichten vorhanden.*
       {% endif %}
-
-  # 5. Quick-Message Presets
-  - type: horizontal-stack
-    title: "⚡ Schnelle Nachricht an die Uhr senden"
-    cards:
-      - type: button
-        name: "Essen ist fertig!"
-        icon: mdi:silverware-fork-knife
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "child"
-            message: "Das Essen ist fertig! Bitte komm jetzt an den Tisch."
-
-      - type: button
-        name: "Nach Hause!"
-        icon: mdi:home-alert
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "child"
-            message: "Bitte mach dich jetzt auf den Heimweg!"
-
-      - type: button
-        name: "Wo bist du?"
-        icon: mdi:map-marker-question
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "child"
-            message: "Wo bist du gerade? Bitte melde dich kurz."
-
-      - type: button
-        name: "Familienchat"
-        icon: mdi:account-group
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "family"
-            message: "Hallo Familie!"
-
-# ------------------------------------------------------------------------------
-# OPTION 2: Modern Mushroom Cards (Requires HACS 'Mushroom' & 'stack-in-card')
-# ------------------------------------------------------------------------------
-type: custom:stack-in-card
-mode: vertical
-cards:
-  - type: map
-    entities:
-      - entity: device_tracker.mia_bounce_2
-    hours_to_show: 12
-    default_zoom: 16
-    aspect_ratio: "16:9"
-
-  - type: custom:mushroom-chips-card
-    chips:
-      - type: entity
-        entity: sensor.mia_battery_level
-        icon_color: green
-      - type: entity
-        entity: sensor.mia_daily_steps
-        icon_color: blue
-      - type: entity
-        entity: sensor.mia_lte_status
-        icon_color: orange
-
-  - type: horizontal-stack
-    cards:
-      - type: custom:mushroom-template-card
-        primary: "Locate (LTE)"
-        secondary: "Wake-up GPS"
-        icon: mdi:crosshairs-gps
-        icon_color: red
-        tap_action:
-          action: call-service
-          service: button.press
-          target:
-            entity_id: button.mia_refresh_location
-
-      - type: custom:mushroom-template-card
-        primary: "LiveTrack"
-        secondary: "Start tracking"
-        icon: mdi:radar
-        icon_color: deep-purple
-        tap_action:
-          action: call-service
-          service: button.press
-          target:
-            entity_id: button.mia_start_livetrack
-
-      - type: custom:mushroom-template-card
-        primary: "Cloud Sync"
-        secondary: "Refresh now"
-        icon: mdi:cloud-sync
-        icon_color: blue
-        tap_action:
-          action: call-service
-          service: button.press
-          target:
-            entity_id: button.mia_poll_cloud_data
-
-  # Mushroom Chat Snippet
-  - type: custom:mushroom-template-card
-    primary: "Letzte Nachricht"
-    secondary: "{{ states('sensor.mia_last_message') }}"
-    icon: mdi:message-text-clock
-    icon_color: teal
-
-  # Quick Send Chips
-  - type: custom:mushroom-chips-card
-    chips:
-      - type: action
-        icon: mdi:silverware-fork-knife
-        content: "Essen fertig"
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "child"
-            message: "Essen ist fertig!"
-      - type: action
-        icon: mdi:home-alert
-        content: "Nach Hause"
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "child"
-            message: "Bitte jetzt nach Hause kommen!"
-      - type: action
-        icon: mdi:account-group
-        content: "Familienchat"
-        tap_action:
-          action: call-service
-          service: garmin_bounce.send_message
-          service_data:
-            target: "family"
-            message: "Hallo Familie!"
