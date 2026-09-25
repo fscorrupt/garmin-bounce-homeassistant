@@ -8,6 +8,7 @@ from homeassistant.helpers import config_validation as cv
 from .const import (
     DOMAIN,
     PLATFORMS,
+    CONF_TOKEN_DATA,
     CONF_DI_TOKEN,
     CONF_IT_TOKEN,
     CONF_SCAN_INTERVAL,
@@ -63,8 +64,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Garmin Bounce from a config entry."""
     di_token = entry.data[CONF_DI_TOKEN]
     it_token = entry.data.get(CONF_IT_TOKEN)
+    token_data = entry.data.get(CONF_TOKEN_DATA)
 
-    api = GarminBounceApiClient(di_token, it_token)
+    def _on_tokens_updated_sync(new_tokens: dict) -> None:
+        """Persist refreshed tokens to config entry safely on the main HA event loop."""
+        def _update():
+            new_data = dict(entry.data)
+            new_data[CONF_DI_TOKEN] = new_tokens.get("di_token") or api.di_token
+            new_data[CONF_IT_TOKEN] = api.it_token
+            new_data[CONF_TOKEN_DATA] = new_tokens
+            hass.config_entries.async_update_entry(entry, data=new_data)
+            _LOGGER.info("Persisted refreshed Garmin tokens to config entry for %s", entry.title)
+
+        hass.loop.call_soon_threadsafe(_update)
+
+    api = GarminBounceApiClient(
+        di_token=di_token,
+        it_token=it_token,
+        token_data=token_data,
+        on_tokens_updated=_on_tokens_updated_sync,
+    )
     scan_interval_sec = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
     coordinator = GarminBounceDataUpdateCoordinator(
         hass, api, update_interval=timedelta(seconds=scan_interval_sec)

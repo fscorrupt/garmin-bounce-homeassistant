@@ -17,6 +17,7 @@ from garminconnect import (
 
 from .const import (
     DOMAIN,
+    CONF_TOKEN_DATA,
     CONF_DI_TOKEN,
     CONF_IT_TOKEN,
     CONF_SCAN_INTERVAL,
@@ -55,20 +56,29 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if not di_token:
                         errors["base"] = "auth_error"
                     else:
-                        client = GarminBounceApiClient(di_token)
+                        token_data = {
+                            "di_token": di_token,
+                            "di_refresh_token": data.get("di_refresh_token"),
+                            "di_client_id": data.get("di_client_id", "GARMIN_CONNECT_MOBILE_ANDROID_DI_2025Q2"),
+                        }
+                        client = GarminBounceApiClient(di_token, token_data=token_data)
+                        await self.hass.async_add_executor_job(client.check_and_refresh_token)
                         it_token = await self.hass.async_add_executor_job(client.exchange_it_token)
+                        await self.hass.async_add_executor_job(client.get_family_info)
+
                         await self.async_set_unique_id(self._email.lower())
                         self._abort_if_unique_id_configured()
                         return self.async_create_entry(
                             title=f"Garmin Jr. ({self._email})",
                             data={
                                 CONF_EMAIL: self._email,
-                                CONF_DI_TOKEN: di_token,
+                                CONF_DI_TOKEN: client.di_token,
                                 CONF_IT_TOKEN: it_token,
+                                CONF_TOKEN_DATA: client.token_data,
                             },
                         )
                 except Exception as err:
-                    _LOGGER.warning("Token login parsing error: %s", err)
+                    _LOGGER.warning("Token login error: %s", err)
                     errors["base"] = "auth_error"
 
             # 2. Standard SSO Login with Password & MFA
@@ -87,6 +97,64 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_EMAIL): str,
+                vol.Optional(CONF_PASSWORD, default=""): str,
+                vol.Optional("token_json", default=""): str,
+            }),
+            errors=errors,
+        )
+
+    async def async_step_reauth(self, entry_data: Dict[str, Any]) -> FlowResult:
+        """Handle re-authentication when token expires or is rejected."""
+        self._email = entry_data.get(CONF_EMAIL, "")
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> FlowResult:
+        """Prompt user for credentials or fresh token JSON to re-authenticate."""
+        errors: Dict[str, str] = {}
+
+        if user_input is not None:
+            self._password = user_input.get(CONF_PASSWORD, "")
+            token_json = user_input.get("token_json", "").strip()
+
+            if token_json:
+                try:
+                    data = json.loads(token_json)
+                    di_token = data.get("di_token") or data.get("access_token")
+                    if not di_token:
+                        errors["base"] = "auth_error"
+                    else:
+                        token_data = {
+                            "di_token": di_token,
+                            "di_refresh_token": data.get("di_refresh_token"),
+                            "di_client_id": data.get("di_client_id", "GARMIN_CONNECT_MOBILE_ANDROID_DI_2025Q2"),
+                        }
+                        client = GarminBounceApiClient(di_token, token_data=token_data)
+                        await self.hass.async_add_executor_job(client.check_and_refresh_token)
+                        it_token = await self.hass.async_add_executor_job(client.exchange_it_token)
+                        await self.hass.async_add_executor_job(client.get_family_info)
+
+                        return await self._update_reauth_entry(client, it_token)
+                except Exception as err:
+                    _LOGGER.warning("Token reauth error: %s", err)
+                    errors["base"] = "auth_error"
+
+            elif not self._password:
+                errors["base"] = "auth_error"
+            else:
+                result = await self.hass.async_add_executor_job(self._try_login)
+                if result == "SUCCESS":
+                    return await self._reauth_from_client()
+                if result == "MFA_REQUIRED":
+                    return await self.async_step_mfa()
+                if result in ("AUTH_ERROR", "CONNECTION_ERROR", "RATE_LIMIT"):
+                    errors["base"] = result.lower()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            description_placeholders={"email": self._email or ""},
+            data_schema=vol.Schema({
                 vol.Optional(CONF_PASSWORD, default=""): str,
                 vol.Optional("token_json", default=""): str,
             }),
@@ -131,6 +199,8 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             result = await self.hass.async_add_executor_job(self._complete_mfa_login, mfa_code)
             if result == "SUCCESS":
+                if "entry_id" in self.context:
+                    return await self._reauth_from_client()
                 return await self._create_entry_from_client()
             errors["base"] = "invalid_mfa"
 
@@ -157,12 +227,20 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "INVALID_MFA"
 
     async def _create_entry_from_client(self) -> FlowResult:
-        """Complete the config flow and create entry with tokens."""
+        """Complete the config flow and create entry with full token persistence."""
         di_token = self._garmin.client.di_token
-        client = GarminBounceApiClient(di_token)
+        di_refresh_token = getattr(self._garmin.client, "di_refresh_token", None)
+        di_client_id = getattr(self._garmin.client, "di_client_id", "GARMIN_CONNECT_MOBILE_ANDROID_DI_2025Q2")
 
-        # Exchange IT token to verify GCS access
+        token_data = {
+            "di_token": di_token,
+            "di_refresh_token": di_refresh_token,
+            "di_client_id": di_client_id,
+        }
+
+        client = GarminBounceApiClient(di_token, token_data=token_data)
         it_token = await self.hass.async_add_executor_job(client.exchange_it_token)
+        await self.hass.async_add_executor_job(client.get_family_info)
 
         await self.async_set_unique_id(self._email.lower())
         self._abort_if_unique_id_configured()
@@ -171,10 +249,47 @@ class GarminBounceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             title=f"Garmin Jr. ({self._email})",
             data={
                 CONF_EMAIL: self._email,
-                CONF_DI_TOKEN: di_token,
+                CONF_DI_TOKEN: client.di_token,
                 CONF_IT_TOKEN: it_token,
+                CONF_TOKEN_DATA: client.token_data,
             },
         )
+
+    async def _reauth_from_client(self) -> FlowResult:
+        """Complete re-authentication using authenticated Garmin client."""
+        di_token = self._garmin.client.di_token
+        di_refresh_token = getattr(self._garmin.client, "di_refresh_token", None)
+        di_client_id = getattr(self._garmin.client, "di_client_id", "GARMIN_CONNECT_MOBILE_ANDROID_DI_2025Q2")
+
+        token_data = {
+            "di_token": di_token,
+            "di_refresh_token": di_refresh_token,
+            "di_client_id": di_client_id,
+        }
+
+        client = GarminBounceApiClient(di_token, token_data=token_data)
+        it_token = await self.hass.async_add_executor_job(client.exchange_it_token)
+        await self.hass.async_add_executor_job(client.get_family_info)
+
+        return await self._update_reauth_entry(client, it_token)
+
+    async def _update_reauth_entry(self, client: GarminBounceApiClient, it_token: str) -> FlowResult:
+        """Update existing config entry during reauth."""
+        entry_id = self.context.get("entry_id")
+        entry = self.hass.config_entries.async_get_entry(entry_id) if entry_id else None
+        if entry:
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_DI_TOKEN: client.di_token,
+                    CONF_IT_TOKEN: it_token,
+                    CONF_TOKEN_DATA: client.token_data,
+                },
+            )
+            await self.hass.config_entries.async_reload(entry.entry_id)
+            return self.async_abort(reason="reauth_successful")
+        return self.async_abort(reason="reauth_successful")
 
     @staticmethod
     @callback

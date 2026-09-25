@@ -5,9 +5,10 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import GarminBounceApiClient, semicircles_to_degrees
+from .api import GarminBounceApiClient, GarminAuthError, semicircles_to_degrees
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,12 +48,19 @@ class GarminBounceDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         """Fetch all data from Garmin endpoints."""
         try:
             return await self.hass.async_add_executor_job(self._update_data_sync)
+        except GarminAuthError as err:
+            _LOGGER.error("Garmin authentication failed: %s", err)
+            raise ConfigEntryAuthFailed(err) from err
         except Exception as err:
+            if "401" in str(err) or "Unauthorized" in str(err):
+                _LOGGER.error("Garmin authentication failed (401): %s", err)
+                raise ConfigEntryAuthFailed(err) from err
             _LOGGER.exception("Error communicating with Garmin API: %s", err)
             raise UpdateFailed(f"Error communicating with Garmin API: {err}") from err
 
     def _update_data_sync(self) -> Dict[str, Any]:
         """Synchronously retrieve family, activity, tracker telemetry, messages, settings, and zones."""
+        self.api.check_and_refresh_token()
         family_info = self.api.get_family_info()
         families = family_info.get("families", [])
 

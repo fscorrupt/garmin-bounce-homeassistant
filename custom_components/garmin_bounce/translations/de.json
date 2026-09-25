@@ -16,6 +16,14 @@
         "data": {
           "mfa_code": "MFA-Code"
         }
+      },
+      "reauth_confirm": {
+        "title": "Garmin-Konto erneut autorisieren",
+        "description": "Das Anmeldetoken für {email} ist abgelaufen. Bitte gib dein Passwort ein oder hinterlege ein aktuelles Token-JSON.",
+        "data": {
+          "password": "Passwort",
+          "token_json": "Token JSON (Optional - umgeht 429 Ratenlimit)"
+        }
       }
     },
     "error": {
@@ -25,7 +33,8 @@
       "connection_error": "Verbindung zu den Garmin-Servern fehlgeschlagen."
     },
     "abort": {
-      "already_configured": "Dieses Garmin-Konto ist bereits eingerichtet."
+      "already_configured": "Dieses Garmin-Konto ist bereits eingerichtet.",
+      "reauth_successful": "Erneute Autorisierung war erfolgreich."
     }
   },
   "options": {

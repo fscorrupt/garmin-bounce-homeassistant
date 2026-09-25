@@ -16,6 +16,14 @@
         "data": {
           "mfa_code": "MFA Code"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Garmin Account",
+        "description": "The login token for {email} has expired. Please enter your password or provide an updated token JSON.",
+        "data": {
+          "password": "Password",
+          "token_json": "Token JSON (Optional - bypasses 429 rate limits)"
+        }
       }
     },
     "error": {
@@ -25,7 +33,8 @@
       "connection_error": "Failed to connect to Garmin servers."
     },
     "abort": {
-      "already_configured": "This Garmin account is already configured."
+      "already_configured": "This Garmin account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
     }
   },
   "options": {
